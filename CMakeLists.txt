@@ -27,6 +27,8 @@ add_library(tree_sitter STATIC
 )
 target_include_directories(tree_sitter PUBLIC
   "${tree_sitter_core_SOURCE_DIR}/lib/include"
+  # Needed for vendored ICU unicode headers (unicode/*.h)
+  "${tree_sitter_core_SOURCE_DIR}/lib/src"
 )
 
 # Pinned grammar versions (tags or commit SHAs).
