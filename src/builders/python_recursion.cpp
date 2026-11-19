@@ -282,21 +282,24 @@ class Resolver {
          ts_node_end_byte(cls), block, id);
   }
 
-  void walk_comprehension(TSNode n, int scope, int owner, uint32_t block) {
+  void push_comprehension(TSNode n, int scope, int owner, uint32_t block,
+                          std::vector<std::pair<TSNode, int>>& stack) {
     const int inner = new_scope(ScopeKind::Comprehension, scope);
+    std::vector<std::pair<TSNode, int>> parts;
     bool first = true;
     uint32_t m = ts_node_named_child_count(n);
     for (uint32_t i = 0; i < m; ++i) {
       TSNode ch = ts_node_named_child(n, i);
       if (type_of(ch) != "for_in_clause") continue;
-      walk(field(ch, "right"), first ? scope : inner, owner, block);
+      parts.emplace_back(field(ch, "right"), first ? scope : inner);
       first = false;
       bind_targets(field(ch, "left"), inner, 0, block, BindKind::Other, owner);
     }
     for (uint32_t i = 0; i < m; ++i) {
       TSNode ch = ts_node_named_child(n, i);
-      if (type_of(ch) != "for_in_clause") walk(ch, inner, owner, block);
+      if (type_of(ch) != "for_in_clause") parts.emplace_back(ch, inner);
     }
+    stack.insert(stack.end(), parts.rbegin(), parts.rend());
   }
 
   int walrus_scope(int scope) const {
@@ -361,6 +364,10 @@ class Resolver {
         stack.emplace_back(field(cur, "body"), inner);
         continue;
       }
+      if (is_comprehension(type_of(cur))) {
+        push_comprehension(cur, cur_scope, owner, block, stack);
+        continue;
+      }
       if (walk_special(cur, cur_scope, owner, block)) continue;
       if (type_of(cur) == "call" && owner != kNone)
         calls_.push_back({.owner = owner,
@@ -391,8 +398,6 @@ class Resolver {
       walk_def(n, TSNode{}, scope, owner, block);
     } else if (t == "class_definition") {
       walk_class(n, n, scope, owner, block);
-    } else if (is_comprehension(t)) {
-      walk_comprehension(n, scope, owner, block);
     } else if (t == "assignment") {
       walk(field(n, "right"), scope, owner, block);
       const BindKind kind = ts_node_is_null(field(n, "right"))

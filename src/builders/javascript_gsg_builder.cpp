@@ -1,5 +1,7 @@
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../include/builders/javascript_gsg_builder.h"
@@ -59,26 +61,6 @@ static bool js_is_bool(TSNode n) {
   return op == "&&" || op == "||";
 }
 
-void JavaScriptGSGBuilder::collect_bool_chain(TSNode n, const string& src,
-                                              GSGNode& into,
-                                              string_view& previous) {
-  for (const char* side : {"left", "right"}) {
-    if (side[0] == 'r') {
-      string_view op{
-        ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
-      if (op != previous) into.addl_cost += 1;
-      previous = op;
-    }
-    TSNode operand =
-      ts_node_child_by_field_name(n, side, side[0] == 'l' ? 4 : 5);
-    TSNode inner = js_unwrap_parens(operand);
-    if (js_is_bool(inner))
-      collect_bool_chain(inner, src, into, previous);
-    else
-      collect_expr(operand, src, into);
-  }
-}
-
 void JavaScriptGSGBuilder::collect_defaults(TSNode params, const string& src,
                                             GSGNode& into) {
   uint32_t m = ts_node_is_null(params) ? 0 : ts_node_named_child_count(params);
@@ -92,15 +74,50 @@ void JavaScriptGSGBuilder::collect_defaults(TSNode params, const string& src,
   }
 }
 
-void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
+void JavaScriptGSGBuilder::collect_expr(TSNode root, const string& src,
                                         GSGNode& into) {
-  if (ts_node_is_null(n)) return;
-  string ty = t(n);
-  if (js_is_bool(n)) {
-    string_view previous;
-    collect_bool_chain(n, src, into, previous);
-    return;
+  enum class Step : uint8_t { Expr, Operand, Op, ChainEnd };
+  std::vector<std::pair<TSNode, Step>> stack{{root, Step::Expr}};
+  std::vector<string_view> previous;
+  auto expand = [&stack](TSNode b) {
+    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5),
+                       Step::Operand);
+    stack.emplace_back(b, Step::Op);
+    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4),
+                       Step::Operand);
+  };
+  while (!stack.empty()) {
+    auto [n, step] = stack.back();
+    stack.pop_back();
+    if (step == Step::ChainEnd) {
+      previous.pop_back();
+    } else if (step == Step::Op) {
+      string_view op{
+        ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
+      if (op != previous.back()) into.addl_cost += 1;
+      previous.back() = op;
+    } else if (step == Step::Operand) {
+      TSNode inner = js_unwrap_parens(n);
+      if (js_is_bool(inner))
+        expand(inner);
+      else
+        stack.emplace_back(n, Step::Expr);
+    } else if (ts_node_is_null(n)) {
+      continue;
+    } else if (js_is_bool(n)) {
+      previous.emplace_back();
+      stack.emplace_back(n, Step::ChainEnd);
+      expand(n);
+    } else if (!collect_special(n, src, into)) {
+      for (uint32_t i = ts_node_named_child_count(n); i > 0; --i)
+        stack.emplace_back(ts_node_named_child(n, i - 1), Step::Expr);
+    }
   }
+}
+
+bool JavaScriptGSGBuilder::collect_special(TSNode n, const string& src,
+                                           GSGNode& into) {
+  string ty = t(n);
   if (ty == "arrow_function" || ty == "function_expression" ||
       ty == "generator_function") {
     GSGNode fn;
@@ -119,7 +136,7 @@ void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
     else
       collect_expr(body, src, fn);
     into.children.emplace_back(std::move(fn));
-    return;
+    return true;
   }
   if (ty == "ternary_expression") {
     GSGNode tern;
@@ -129,11 +146,9 @@ void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
     collect_expr(ts_node_child_by_field_name(n, "consequence", 11), src, tern);
     collect_expr(ts_node_child_by_field_name(n, "alternative", 11), src, tern);
     into.children.emplace_back(std::move(tern));
-    return;
+    return true;
   }
-  int m = ts_node_named_child_count(n);
-  for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(n, i), src, into);
+  return false;
 }
 
 void JavaScriptGSGBuilder::push_expr(std::vector<GSGNode>& out, TSNode loc_node,

@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../include/builders/c_gsg_builder.h"
@@ -381,33 +383,50 @@ static string_view c_bool_op(TSNode n) {
   return {};
 }
 
-void CLikeGSGBuilder::collect_bool_chain(TSNode n, const string& src,
-                                         GSGNode& into, string_view& previous) {
-  for (const char* side : {"left", "right"}) {
-    if (side[0] == 'r') {
+void CLikeGSGBuilder::collect_expr(TSNode root, const string& src,
+                                   GSGNode& into) {
+  enum class Step : uint8_t { Expr, Operand, Op, ChainEnd };
+  std::vector<std::pair<TSNode, Step>> stack{{root, Step::Expr}};
+  std::vector<string_view> previous;
+  auto expand = [&stack](TSNode b) {
+    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5),
+                       Step::Operand);
+    stack.emplace_back(b, Step::Op);
+    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4),
+                       Step::Operand);
+  };
+  while (!stack.empty()) {
+    auto [n, step] = stack.back();
+    stack.pop_back();
+    if (step == Step::ChainEnd) {
+      previous.pop_back();
+    } else if (step == Step::Op) {
       string_view op = c_bool_op(n);
-      if (op != previous) into.addl_cost += 1;
-      previous = op;
+      if (op != previous.back()) into.addl_cost += 1;
+      previous.back() = op;
+    } else if (step == Step::Operand) {
+      TSNode inner = c_unwrap_parens(n);
+      if (!c_bool_op(inner).empty())
+        expand(inner);
+      else
+        stack.emplace_back(n, Step::Expr);
+    } else if (ts_node_is_null(n)) {
+      continue;
+    } else if (!c_bool_op(n).empty()) {
+      previous.emplace_back();
+      stack.emplace_back(n, Step::ChainEnd);
+      expand(n);
+    } else if (!collect_special(n, src, into)) {
+      for (uint32_t i = ts_node_named_child_count(n); i > 0; --i)
+        stack.emplace_back(ts_node_named_child(n, i - 1), Step::Expr);
     }
-    TSNode operand =
-      ts_node_child_by_field_name(n, side, side[0] == 'l' ? 4 : 5);
-    TSNode inner = c_unwrap_parens(operand);
-    if (!c_bool_op(inner).empty())
-      collect_bool_chain(inner, src, into, previous);
-    else
-      collect_expr(operand, src, into);
   }
 }
 
-void CLikeGSGBuilder::collect_expr(TSNode n, const string& src, GSGNode& into) {
-  if (ts_node_is_null(n)) return;
+bool CLikeGSGBuilder::collect_special(TSNode n, const string& src,
+                                      GSGNode& into) {
   string ty = t(n);
-  if (ty == "lambda_expression") return;
-  if (!c_bool_op(n).empty()) {
-    string_view previous;
-    collect_bool_chain(n, src, into, previous);
-    return;
-  }
+  if (ty == "lambda_expression") return true;
   if (ty == "conditional_expression") {
     GSGNode tern;
     tern.kind = GSGNodeKind::Ternary;
@@ -416,24 +435,25 @@ void CLikeGSGBuilder::collect_expr(TSNode n, const string& src, GSGNode& into) {
     collect_expr(ts_node_child_by_field_name(n, "consequence", 11), src, tern);
     collect_expr(ts_node_child_by_field_name(n, "alternative", 11), src, tern);
     into.children.emplace_back(std::move(tern));
-    return;
+    return true;
   }
-  int m = ts_node_named_child_count(n);
-  for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(n, i), src, into);
+  return false;
 }
 
 void CLikeGSGBuilder::collect_lambdas_in_node(TSNode n, const string& src,
                                               std::vector<GSGNode>& out) {
-  if (ts_node_is_null(n)) return;
-  string ty = t(n);
-  if (ty == "lambda_expression") {
-    out.emplace_back(build_lambda(n, src));
-    return;
+  std::vector<TSNode> stack{n};
+  while (!stack.empty()) {
+    TSNode cur = stack.back();
+    stack.pop_back();
+    if (ts_node_is_null(cur)) continue;
+    if (t(cur) == "lambda_expression") {
+      out.emplace_back(build_lambda(cur, src));
+      continue;
+    }
+    for (uint32_t i = ts_node_named_child_count(cur); i > 0; --i)
+      stack.push_back(ts_node_named_child(cur, i - 1));
   }
-  int m = ts_node_named_child_count(n);
-  for (int i = 0; i < m; ++i)
-    collect_lambdas_in_node(ts_node_named_child(n, i), src, out);
 }
 
 GSGNode CLikeGSGBuilder::build_lambda(TSNode n, const string& src) {

@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../include/builders/python_gsg_builder.h"
@@ -51,24 +53,6 @@ static TSNode unwrap_parens(TSNode node) {
   return node;
 }
 
-void PythonGSGBuilder::collect_bool_chain(TSNode node, const string& source,
-                                          GSGNode& into, string& previous) {
-  for (const char* side : {"left", "right"}) {
-    if (side[0] == 'r') {
-      string op = node_type(ts_node_child_by_field_name(node, "operator", 8));
-      if (op != previous) into.addl_cost += 1;
-      previous = op;
-    }
-    TSNode operand =
-      ts_node_child_by_field_name(node, side, side[0] == 'l' ? 4 : 5);
-    TSNode inner = unwrap_parens(operand);
-    if (!ts_node_is_null(inner) && node_type(inner) == "boolean_operator")
-      collect_bool_chain(inner, source, into, previous);
-    else
-      collect_expr(operand, source, into);
-  }
-}
-
 void PythonGSGBuilder::collect_defaults(TSNode parameters, const string& source,
                                         GSGNode& into) {
   if (ts_node_is_null(parameters)) return;
@@ -99,15 +83,49 @@ void PythonGSGBuilder::collect_definition_header(TSNode decorated, TSNode def,
                      into);
 }
 
-void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
+void PythonGSGBuilder::collect_expr(TSNode root, const string& source,
                                     GSGNode& into) {
-  if (ts_node_is_null(node)) return;
-  string t = node_type(node);
-  if (t == "boolean_operator") {
-    string previous;
-    collect_bool_chain(node, source, into, previous);
-    return;
+  enum class Step : uint8_t { Expr, Operand, Op, ChainEnd };
+  std::vector<std::pair<TSNode, Step>> stack{{root, Step::Expr}};
+  std::vector<string> previous;
+  auto expand = [&stack](TSNode b) {
+    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5),
+                       Step::Operand);
+    stack.emplace_back(b, Step::Op);
+    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4),
+                       Step::Operand);
+  };
+  while (!stack.empty()) {
+    auto [n, step] = stack.back();
+    stack.pop_back();
+    if (step == Step::ChainEnd) {
+      previous.pop_back();
+    } else if (step == Step::Op) {
+      string op = node_type(ts_node_child_by_field_name(n, "operator", 8));
+      if (op != previous.back()) into.addl_cost += 1;
+      previous.back() = op;
+    } else if (step == Step::Operand) {
+      TSNode inner = unwrap_parens(n);
+      if (!ts_node_is_null(inner) && node_type(inner) == "boolean_operator")
+        expand(inner);
+      else
+        stack.emplace_back(n, Step::Expr);
+    } else if (ts_node_is_null(n)) {
+      continue;
+    } else if (node_type(n) == "boolean_operator") {
+      previous.emplace_back();
+      stack.emplace_back(n, Step::ChainEnd);
+      expand(n);
+    } else if (!collect_special(n, source, into)) {
+      for (uint32_t i = ts_node_named_child_count(n); i > 0; --i)
+        stack.emplace_back(ts_node_named_child(n, i - 1), Step::Expr);
+    }
   }
+}
+
+bool PythonGSGBuilder::collect_special(TSNode node, const string& source,
+                                       GSGNode& into) {
+  string t = node_type(node);
   if (t == "lambda") {
     GSGNode fn = expr_node(GSGNodeKind::Function, node);
     GSGNode defaults = expr_node(GSGNodeKind::Header, node);
@@ -117,7 +135,7 @@ void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
       fn.children.emplace_back(std::move(defaults));
     collect_expr(ts_node_child_by_field_name(node, "body", 4), source, fn);
     into.children.emplace_back(std::move(fn));
-    return;
+    return true;
   }
   if (t == "conditional_expression") {
     GSGNode tern;
@@ -134,11 +152,9 @@ void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
         collect_expr(ch, source, tern);
     }
     into.children.emplace_back(std::move(tern));
-    return;
+    return true;
   }
-  int m = ts_node_named_child_count(node);
-  for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(node, i), source, into);
+  return false;
 }
 
 GSGNode PythonGSGBuilder::expr_node(GSGNodeKind kind, TSNode loc_node) {
