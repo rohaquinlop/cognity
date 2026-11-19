@@ -36,6 +36,7 @@ class CLikeGSGBuilder : public IBuilder {
   GSGNode build_do_while(TSNode n, const std::string& src);
 
   static void collect_expr(TSNode n, const std::string& src, GSGNode& into);
+  static bool collect_special(TSNode n, const std::string& src, GSGNode& into);
   static void collect_bool_chain(TSNode n, const std::string& src,
                                  GSGNode& into, std::string_view& previous);
   static void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,

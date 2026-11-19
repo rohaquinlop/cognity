@@ -53,6 +53,8 @@ class PythonGSGBuilder : public IBuilder {
                             const std::string& source);
   static void collect_expr(TSNode node, const std::string& source,
                            GSGNode& into);
+  static bool collect_special(TSNode node, const std::string& source,
+                              GSGNode& into);
   static void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,
                         const std::string& source);
   static void push_header(GSGNode& stmt, TSNode expr,

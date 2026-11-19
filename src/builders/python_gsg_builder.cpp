@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../include/builders/python_gsg_builder.h"
@@ -53,19 +54,27 @@ static TSNode unwrap_parens(TSNode node) {
 
 void PythonGSGBuilder::collect_bool_chain(TSNode node, const string& source,
                                           GSGNode& into, string& previous) {
-  for (const char* side : {"left", "right"}) {
-    if (side[0] == 'r') {
-      string op = node_type(ts_node_child_by_field_name(node, "operator", 8));
+  std::vector<std::pair<TSNode, bool>> stack;
+  auto expand = [&stack](TSNode b) {
+    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5), false);
+    stack.emplace_back(b, true);
+    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4), false);
+  };
+  expand(node);
+  while (!stack.empty()) {
+    auto [n, is_op] = stack.back();
+    stack.pop_back();
+    if (is_op) {
+      string op = node_type(ts_node_child_by_field_name(n, "operator", 8));
       if (op != previous) into.addl_cost += 1;
       previous = op;
+      continue;
     }
-    TSNode operand =
-      ts_node_child_by_field_name(node, side, side[0] == 'l' ? 4 : 5);
-    TSNode inner = unwrap_parens(operand);
+    TSNode inner = unwrap_parens(n);
     if (!ts_node_is_null(inner) && node_type(inner) == "boolean_operator")
-      collect_bool_chain(inner, source, into, previous);
+      expand(inner);
     else
-      collect_expr(operand, source, into);
+      collect_expr(n, source, into);
   }
 }
 
@@ -99,14 +108,25 @@ void PythonGSGBuilder::collect_definition_header(TSNode decorated, TSNode def,
                      into);
 }
 
-void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
+void PythonGSGBuilder::collect_expr(TSNode root, const string& source,
                                     GSGNode& into) {
-  if (ts_node_is_null(node)) return;
+  std::vector<TSNode> stack{root};
+  while (!stack.empty()) {
+    TSNode node = stack.back();
+    stack.pop_back();
+    if (ts_node_is_null(node) || collect_special(node, source, into)) continue;
+    for (uint32_t i = ts_node_named_child_count(node); i > 0; --i)
+      stack.push_back(ts_node_named_child(node, i - 1));
+  }
+}
+
+bool PythonGSGBuilder::collect_special(TSNode node, const string& source,
+                                       GSGNode& into) {
   string t = node_type(node);
   if (t == "boolean_operator") {
     string previous;
     collect_bool_chain(node, source, into, previous);
-    return;
+    return true;
   }
   if (t == "lambda") {
     GSGNode fn = expr_node(GSGNodeKind::Function, node);
@@ -117,7 +137,7 @@ void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
       fn.children.emplace_back(std::move(defaults));
     collect_expr(ts_node_child_by_field_name(node, "body", 4), source, fn);
     into.children.emplace_back(std::move(fn));
-    return;
+    return true;
   }
   if (t == "conditional_expression") {
     GSGNode tern;
@@ -134,11 +154,9 @@ void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
         collect_expr(ch, source, tern);
     }
     into.children.emplace_back(std::move(tern));
-    return;
+    return true;
   }
-  int m = ts_node_named_child_count(node);
-  for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(node, i), source, into);
+  return false;
 }
 
 GSGNode PythonGSGBuilder::expr_node(GSGNodeKind kind, TSNode loc_node) {

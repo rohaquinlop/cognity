@@ -3,6 +3,8 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <tuple>
+#include <vector>
 
 #include "../include/builders/javascript_gsg_builder.h"
 #include "../include/builders/python_gsg_builder.h"
@@ -1280,6 +1282,46 @@ int main() {
                 << got << "\n"
                 << code << "\n";
       ok = false;
+    }
+  }
+
+  {
+    const std::size_t depth = 50000;
+    auto repeat = [](const std::string& s, std::size_t n) {
+      std::string out;
+      out.reserve(s.size() * n);
+      for (std::size_t i = 0; i < n; ++i) out += s;
+      return out;
+    };
+    const std::vector<std::tuple<std::string, Language, unsigned int>> deep = {
+      {"def f(a):\n    return a" + repeat("+a", depth) + "\n", Language::Python,
+       0},
+      {"def f(a):\n    return a" + repeat("()", depth) + "\n", Language::Python,
+       0},
+      {"def f(a):\n    return a" + repeat(" or a", depth) + "\n",
+       Language::Python, 1},
+      {"def f(a):\n    return " + repeat("[x for x in ", depth) + "a" +
+         std::string(depth, ']') + "\n",
+       Language::Python, 0},
+      {"function f(a) {\n  return a" + repeat("+a", depth) + ";\n}\n",
+       Language::JavaScript, 0},
+      {"function f(a) {\n  return a" + repeat("()", depth) + ";\n}\n",
+       Language::JavaScript, 0},
+      {"function f(a) {\n  return a" + repeat(" || a", depth) + ";\n}\n",
+       Language::JavaScript, 1},
+      {"int f(int a) {\n  return a" + repeat("+a", depth) + ";\n}\n",
+       Language::C, 0},
+      {"int f(int a) {\n  return a" + repeat("()", depth) + ";\n}\n",
+       Language::C, 0},
+      {"int f(int a) {\n  return a" + repeat(" || a", depth) + ";\n}\n",
+       Language::C, 1},
+    };
+    for (const auto& [code, lang, expected] : deep) {
+      if (total(analyze_source(code, lang)) != expected) {
+        std::cerr << "Deep expression: wrong total for " << code.substr(0, 30)
+                  << "\n";
+        ok = false;
+      }
     }
   }
 

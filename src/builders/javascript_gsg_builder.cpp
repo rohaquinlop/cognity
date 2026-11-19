@@ -1,5 +1,6 @@
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../include/builders/javascript_gsg_builder.h"
@@ -62,20 +63,28 @@ static bool js_is_bool(TSNode n) {
 void JavaScriptGSGBuilder::collect_bool_chain(TSNode n, const string& src,
                                               GSGNode& into,
                                               string_view& previous) {
-  for (const char* side : {"left", "right"}) {
-    if (side[0] == 'r') {
+  std::vector<std::pair<TSNode, bool>> stack;
+  auto expand = [&stack](TSNode b) {
+    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5), false);
+    stack.emplace_back(b, true);
+    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4), false);
+  };
+  expand(n);
+  while (!stack.empty()) {
+    auto [cur, is_op] = stack.back();
+    stack.pop_back();
+    if (is_op) {
       string_view op{
-        ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
+        ts_node_type(ts_node_child_by_field_name(cur, "operator", 8))};
       if (op != previous) into.addl_cost += 1;
       previous = op;
+      continue;
     }
-    TSNode operand =
-      ts_node_child_by_field_name(n, side, side[0] == 'l' ? 4 : 5);
-    TSNode inner = js_unwrap_parens(operand);
+    TSNode inner = js_unwrap_parens(cur);
     if (js_is_bool(inner))
-      collect_bool_chain(inner, src, into, previous);
+      expand(inner);
     else
-      collect_expr(operand, src, into);
+      collect_expr(cur, src, into);
   }
 }
 
@@ -92,14 +101,25 @@ void JavaScriptGSGBuilder::collect_defaults(TSNode params, const string& src,
   }
 }
 
-void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
+void JavaScriptGSGBuilder::collect_expr(TSNode root, const string& src,
                                         GSGNode& into) {
-  if (ts_node_is_null(n)) return;
+  std::vector<TSNode> stack{root};
+  while (!stack.empty()) {
+    TSNode n = stack.back();
+    stack.pop_back();
+    if (ts_node_is_null(n) || collect_special(n, src, into)) continue;
+    for (uint32_t i = ts_node_named_child_count(n); i > 0; --i)
+      stack.push_back(ts_node_named_child(n, i - 1));
+  }
+}
+
+bool JavaScriptGSGBuilder::collect_special(TSNode n, const string& src,
+                                           GSGNode& into) {
   string ty = t(n);
   if (js_is_bool(n)) {
     string_view previous;
     collect_bool_chain(n, src, into, previous);
-    return;
+    return true;
   }
   if (ty == "arrow_function" || ty == "function_expression" ||
       ty == "generator_function") {
@@ -119,7 +139,7 @@ void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
     else
       collect_expr(body, src, fn);
     into.children.emplace_back(std::move(fn));
-    return;
+    return true;
   }
   if (ty == "ternary_expression") {
     GSGNode tern;
@@ -129,11 +149,9 @@ void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
     collect_expr(ts_node_child_by_field_name(n, "consequence", 11), src, tern);
     collect_expr(ts_node_child_by_field_name(n, "alternative", 11), src, tern);
     into.children.emplace_back(std::move(tern));
-    return;
+    return true;
   }
-  int m = ts_node_named_child_count(n);
-  for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(n, i), src, into);
+  return false;
 }
 
 void JavaScriptGSGBuilder::push_expr(std::vector<GSGNode>& out, TSNode loc_node,

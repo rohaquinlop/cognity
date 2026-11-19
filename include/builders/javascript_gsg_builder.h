@@ -29,6 +29,7 @@ class JavaScriptGSGBuilder : public IBuilder {
   GSGNode build_do_while(TSNode n, const std::string& src);
 
   void collect_expr(TSNode n, const std::string& src, GSGNode& into);
+  bool collect_special(TSNode n, const std::string& src, GSGNode& into);
   void collect_bool_chain(TSNode n, const std::string& src, GSGNode& into,
                           std::string_view& previous);
   void collect_defaults(TSNode params, const std::string& src, GSGNode& into);

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../include/builders/c_gsg_builder.h"
@@ -383,30 +384,50 @@ static string_view c_bool_op(TSNode n) {
 
 void CLikeGSGBuilder::collect_bool_chain(TSNode n, const string& src,
                                          GSGNode& into, string_view& previous) {
-  for (const char* side : {"left", "right"}) {
-    if (side[0] == 'r') {
-      string_view op = c_bool_op(n);
+  std::vector<std::pair<TSNode, bool>> stack;
+  auto expand = [&stack](TSNode b) {
+    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5), false);
+    stack.emplace_back(b, true);
+    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4), false);
+  };
+  expand(n);
+  while (!stack.empty()) {
+    auto [cur, is_op] = stack.back();
+    stack.pop_back();
+    if (is_op) {
+      string_view op = c_bool_op(cur);
       if (op != previous) into.addl_cost += 1;
       previous = op;
+      continue;
     }
-    TSNode operand =
-      ts_node_child_by_field_name(n, side, side[0] == 'l' ? 4 : 5);
-    TSNode inner = c_unwrap_parens(operand);
+    TSNode inner = c_unwrap_parens(cur);
     if (!c_bool_op(inner).empty())
-      collect_bool_chain(inner, src, into, previous);
+      expand(inner);
     else
-      collect_expr(operand, src, into);
+      collect_expr(cur, src, into);
   }
 }
 
-void CLikeGSGBuilder::collect_expr(TSNode n, const string& src, GSGNode& into) {
-  if (ts_node_is_null(n)) return;
+void CLikeGSGBuilder::collect_expr(TSNode root, const string& src,
+                                   GSGNode& into) {
+  std::vector<TSNode> stack{root};
+  while (!stack.empty()) {
+    TSNode n = stack.back();
+    stack.pop_back();
+    if (ts_node_is_null(n) || collect_special(n, src, into)) continue;
+    for (uint32_t i = ts_node_named_child_count(n); i > 0; --i)
+      stack.push_back(ts_node_named_child(n, i - 1));
+  }
+}
+
+bool CLikeGSGBuilder::collect_special(TSNode n, const string& src,
+                                      GSGNode& into) {
   string ty = t(n);
-  if (ty == "lambda_expression") return;
+  if (ty == "lambda_expression") return true;
   if (!c_bool_op(n).empty()) {
     string_view previous;
     collect_bool_chain(n, src, into, previous);
-    return;
+    return true;
   }
   if (ty == "conditional_expression") {
     GSGNode tern;
@@ -416,24 +437,25 @@ void CLikeGSGBuilder::collect_expr(TSNode n, const string& src, GSGNode& into) {
     collect_expr(ts_node_child_by_field_name(n, "consequence", 11), src, tern);
     collect_expr(ts_node_child_by_field_name(n, "alternative", 11), src, tern);
     into.children.emplace_back(std::move(tern));
-    return;
+    return true;
   }
-  int m = ts_node_named_child_count(n);
-  for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(n, i), src, into);
+  return false;
 }
 
 void CLikeGSGBuilder::collect_lambdas_in_node(TSNode n, const string& src,
                                               std::vector<GSGNode>& out) {
-  if (ts_node_is_null(n)) return;
-  string ty = t(n);
-  if (ty == "lambda_expression") {
-    out.emplace_back(build_lambda(n, src));
-    return;
+  std::vector<TSNode> stack{n};
+  while (!stack.empty()) {
+    TSNode cur = stack.back();
+    stack.pop_back();
+    if (ts_node_is_null(cur)) continue;
+    if (t(cur) == "lambda_expression") {
+      out.emplace_back(build_lambda(cur, src));
+      continue;
+    }
+    for (uint32_t i = ts_node_named_child_count(cur); i > 0; --i)
+      stack.push_back(ts_node_named_child(cur, i - 1));
   }
-  int m = ts_node_named_child_count(n);
-  for (int i = 0; i < m; ++i)
-    collect_lambdas_in_node(ts_node_named_child(n, i), src, out);
 }
 
 GSGNode CLikeGSGBuilder::build_lambda(TSNode n, const string& src) {
