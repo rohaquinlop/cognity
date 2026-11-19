@@ -1597,6 +1597,24 @@ int main() {
     check_recursion(code, Language::Python, exp);
   for (const auto& [code, lang, exp] : c_recursion_cases())
     check_recursion(code, lang, exp);
+  const std::vector<std::pair<std::string, unsigned int>> range_for_calls = {
+    {"int f(int n) {\n  for (auto f : xs) {\n    f(1);\n  }\n}\n", 0},
+    {"int f(int n) {\n  for (auto [f, g] : m) {\n    f(1);\n  }\n}\n", 0},
+    {"int f(int n) {\n  for (auto& [g, f] : m) {\n    f(1);\n  }\n}\n", 0},
+    {"int f(int n) {\n  for (const auto& f : xs) {\n    f(1);\n  }\n}\n", 0},
+    {"int f(int n) {\n  for (auto* f : xs) {}\n  f(1);\n}\n", 1},
+    {"int f(int n) {\n  for (auto f :\n    f(1)) {}\n}\n", 1},
+    {"int f(int n) {\n  for (auto g : xs) {\n    f(1);\n  }\n}\n", 1},
+  };
+  for (const auto& [code, exp] : range_for_calls) {
+    unsigned int got = row_cost(analyze_source(code, Language::Cpp), 2);
+    if (got != exp) {
+      std::cerr << "Range-for recursion mismatch: expected " << exp << ", got "
+                << got << "\n"
+                << code << "\n";
+      ok = false;
+    }
+  }
 
   {
     const std::size_t depth = 50000;

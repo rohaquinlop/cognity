@@ -134,8 +134,10 @@ void signature(TSNode def, const string& src, Def& d) {
   if (max_args != kVariadic && max_args < min_args) max_args = min_args;
 }
 
-TSNode declared_name(TSNode decl) {
-  while (!ts_node_is_null(decl) && type_of(decl) != "identifier") {
+TSNode innermost_declarator(TSNode decl, bool stop_at_binding) {
+  while (
+    !ts_node_is_null(decl) && type_of(decl) != "identifier" &&
+    !(stop_at_binding && type_of(decl) == "structured_binding_declarator")) {
     TSNode inner = field(decl, "declarator");
     if (ts_node_is_null(inner) && ts_node_named_child_count(decl) > 0)
       inner = ts_node_named_child(decl, 0);
@@ -143,6 +145,8 @@ TSNode declared_name(TSNode decl) {
   }
   return decl;
 }
+
+TSNode declared_name(TSNode decl) { return innermost_declarator(decl, false); }
 
 bool declares_function(TSNode decl) {
   string_view last;
@@ -176,6 +180,21 @@ void collect_locals(TSNode n, TSNode region, const string& src,
         (t == "abstract_function_declarator" &&
          type_of(ts_node_parent(cur)) != "lambda_expression"))
       continue;
+    TSNode body = t == "for_range_loop" ? field(cur, "body") : TSNode{};
+    if (!ts_node_is_null(body)) {
+      TSNode decl = innermost_declarator(field(cur, "declarator"), true);
+      const bool binding = !ts_node_is_null(decl) &&
+                           type_of(decl) == "structured_binding_declarator";
+      const uint32_t k = binding ? ts_node_named_child_count(decl) : 1;
+      for (uint32_t i = 0; i < k && !ts_node_is_null(decl); ++i) {
+        TSNode name = binding ? ts_node_named_child(decl, i) : decl;
+        if (type_of(name) != "identifier") continue;
+        out.push_back({.name = string(slice(src, name)),
+                       .from = ts_node_start_byte(body),
+                       .start = ts_node_start_byte(cur),
+                       .end = ts_node_end_byte(cur)});
+      }
+    }
     if (t == "parameter_declaration" || t == "optional_parameter_declaration" ||
         t == "declaration") {
       uint32_t m = ts_node_child_count(cur);
