@@ -155,19 +155,24 @@ std::optional<std::size_t> branch_of(const std::vector<Range>& branches,
   return std::nullopt;
 }
 
-std::optional<std::vector<TSNode>> shared_branch(TSNode statement,
-                                                 uint32_t start) {
-  std::vector<TSNode> suites;
+struct Branch {
+  TSNode clause;
+  TSNode suite;
+};
+
+std::vector<Branch> branches_of(TSNode statement) {
+  std::vector<Branch> out;
   string_view t = type_of(statement);
   if (t == "if_statement") {
-    suites.push_back(field(statement, "consequence"));
+    out.push_back(
+      {.clause = TSNode{}, .suite = field(statement, "consequence")});
     uint32_t n = ts_node_named_child_count(statement);
     for (uint32_t i = 0; i < n; ++i) {
       TSNode ch = ts_node_named_child(statement, i);
       if (type_of(ch) == "elif_clause")
-        suites.push_back(field(ch, "consequence"));
+        out.push_back({.clause = ch, .suite = field(ch, "consequence")});
       else if (type_of(ch) == "else_clause")
-        suites.push_back(field(ch, "body"));
+        out.push_back({.clause = ch, .suite = field(ch, "body")});
     }
   } else if (t == "match_statement") {
     TSNode body = field(statement, "body");
@@ -175,14 +180,17 @@ std::optional<std::vector<TSNode>> shared_branch(TSNode statement,
     for (uint32_t i = 0; i < n; ++i) {
       TSNode ch = ts_node_named_child(body, i);
       if (type_of(ch) == "case_clause")
-        suites.push_back(field(ch, "consequence"));
+        out.push_back({.clause = ch, .suite = field(ch, "consequence")});
     }
-  } else {
-    return std::nullopt;
   }
-  for (TSNode suite : suites) {
-    const std::optional<Range> r = suite_range(suite);
-    if (r && r->contains(start)) return statements(suite);
+  return out;
+}
+
+std::optional<std::vector<TSNode>> shared_branch(TSNode statement,
+                                                 uint32_t start) {
+  for (const Branch& b : branches_of(statement)) {
+    const std::optional<Range> r = suite_range(b.suite);
+    if (r && r->contains(start)) return statements(b.suite);
   }
   return std::nullopt;
 }
@@ -206,11 +214,6 @@ bool ends_pass(TSNode statement) {
   return false;
 }
 
-/**
- * A suite on the way from a loop body down to a definition: the index of the
- * statement that holds the definition, and of the last statement before it
- * that holds a `break` or `continue` of the loop.
- */
 struct Level {
   std::vector<TSNode> suite;
   std::size_t def_index;
@@ -218,10 +221,8 @@ struct Level {
 };
 
 /**
- * The suites from the loop body down to the one that has the definition at
- * `start` as a statement, each through the branch of an `if` or `match`;
- * nullopt when no such path exists, or when a `try` or `with` around the loop
- * can catch an exception raised in a pass.
+ * nullopt when a `try` or `with` around the loop can catch an exception raised
+ * mid-pass: the next pass may then never reach the definition.
  */
 std::optional<std::vector<Level>> pass_levels(const Flow& flow, TSNode loop,
                                               uint32_t start) {
@@ -252,10 +253,8 @@ std::optional<std::vector<Level>> pass_levels(const Flow& flow, TSNode loop,
 }
 
 /**
- * Whether, in every pass of the loop, the binding at `at` runs before the
- * definition at the end of `levels` binds: both sit in the innermost suite,
- * the binding first or in the `for` target, with no `break` or `continue`
- * between them.
+ * A `break` or `continue` between the binding and the definition can end a
+ * pass after the binding ran, so the binding becomes the name's final value.
  */
 bool runs_in_order(TSNode loop, const std::vector<Level>& levels, uint32_t at) {
   TSNode target = field(loop, "left");
@@ -280,13 +279,14 @@ bool runs_in_order(TSNode loop, const std::vector<Level>& levels, uint32_t at) {
   return false;
 }
 
-/**
- * The loops, branches, and `try` handlers of a scope that hold a definition,
- * used to decide whether another binding of its name has always run when the
- * definition binds it. Ported from Complexipy `recursion.rs`.
- */
+/** Ported from Complexipy 9.0.0 `recursion.rs` (`Binder`). */
 class Binder {
  public:
+  /**
+   * A handler binding is excluded only when the definition ends the `try`
+   * body: a statement after it could raise and run the handler after the
+   * definition bound the name.
+   */
   Binder(const Flow* flow, const Span& span) : flow_(flow), bound_(span.bound) {
     if (!flow) return;
     for (TSNode loop : flow->loops)
@@ -338,6 +338,12 @@ class Binder {
     return false;
   }
 };
+
+Binder binder(const Scope& sc, const Span& span) {
+  const bool ordered =
+    sc.kind == ScopeKind::Module || sc.kind == ScopeKind::Function;
+  return {ordered ? &sc.flow : nullptr, span};
+}
 
 class Resolver {
  public:
@@ -422,24 +428,13 @@ class Resolver {
     string_view t = type_of(n);
     if (t == "for_statement" || t == "while_statement") {
       flow.loops.push_back(n);
-    } else if (t == "if_statement") {
+    } else if (t == "if_statement" || t == "match_statement") {
       std::vector<Range> branches;
-      if (auto body = suite_range(field(n, "consequence")))
-        branches.push_back(*body);
-      uint32_t m = ts_node_named_child_count(n);
-      for (uint32_t i = 0; i < m; ++i) {
-        TSNode ch = ts_node_named_child(n, i);
-        if (type_of(ch) == "elif_clause" || type_of(ch) == "else_clause")
-          branches.push_back(range_of(ch));
-      }
-      flow.branches.push_back(std::move(branches));
-    } else if (t == "match_statement") {
-      std::vector<Range> branches;
-      TSNode body = field(n, "body");
-      uint32_t m = ts_node_named_child_count(body);
-      for (uint32_t i = 0; i < m; ++i) {
-        TSNode ch = ts_node_named_child(body, i);
-        if (type_of(ch) == "case_clause") branches.push_back(range_of(ch));
+      for (const Branch& b : branches_of(n)) {
+        if (!ts_node_is_null(b.clause))
+          branches.push_back(range_of(b.clause));
+        else if (auto body = suite_range(b.suite))
+          branches.push_back(*body);
       }
       flow.branches.push_back(std::move(branches));
     } else if (t == "try_statement") {
@@ -459,12 +454,6 @@ class Resolver {
       if (auto body = suite_range(field(n, "body")))
         flow.guards.push_back(*body);
     }
-  }
-
-  Binder binder(const Scope& sc, const Span& span) const {
-    const bool ordered =
-      sc.kind == ScopeKind::Module || sc.kind == ScopeKind::Function;
-    return {ordered ? &sc.flow : nullptr, span};
   }
 
   void bind_targets(TSNode target, int scope, uint32_t pos, uint32_t block,
