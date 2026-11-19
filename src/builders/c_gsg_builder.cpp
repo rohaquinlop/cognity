@@ -210,6 +210,7 @@ void CLikeGSGBuilder::build_switch(TSNode s, const string& src,
   GSGNode sw;
   sw.kind = GSGNodeKind::Switch;
   sw.loc = loc(s);
+  push_header(sw, ts_node_child_by_field_name(s, "condition", 9), src);
   TSNode body = ts_node_child_by_field_name(s, "body", 4);
   uint32_t cn = ts_node_is_null(body) ? 0 : ts_node_named_child_count(body);
   for (uint32_t j = 0; j < cn; ++j) {
@@ -334,6 +335,8 @@ GSGNode CLikeGSGBuilder::build_for(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::For;
   g.loc = loc(n);
+  for (string_view f : {"initializer", "condition", "update"})
+    push_header(g, ts_node_child_by_field_name(n, f.data(), f.size()), src);
   build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
                        g.children);
   return g;
@@ -349,61 +352,47 @@ GSGNode CLikeGSGBuilder::build_do_while(TSNode n, const string& src) {
   return g;
 }
 
-static inline bool has_logical_token(const string& s) {
-  return s.find("&&") != string::npos || s.find("||") != string::npos ||
-         s.find('!') != string::npos;
+static TSNode c_unwrap_parens(TSNode n) {
+  while (!ts_node_is_null(n) && t(n) == "parenthesized_expression" &&
+         ts_node_named_child_count(n) == 1)
+    n = ts_node_named_child(n, 0);
+  return n;
 }
 
-static inline string_view sv_slice(const string& src, TSNode n) {
-  const uint32_t a = ts_node_start_byte(n);
-  const uint32_t b = ts_node_end_byte(n);
-  return string_view(src).substr(a, b - a);
+static string_view c_bool_op(TSNode n) {
+  if (ts_node_is_null(n) || t(n) != "binary_expression") return {};
+  string_view op{ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
+  if (op == "&&" || op == "and") return "&&";
+  if (op == "||" || op == "or") return "||";
+  return {};
 }
 
-static unsigned int c_count_bool_alternations(TSNode n, const string& src) {
-  string ty = t(n);
-  unsigned int c = 0;
-  if (ty == "binary_expression") {
-    TSNode left = ts_node_child_by_field_name(n, "left", 4);
-    TSNode right = ts_node_child_by_field_name(n, "right", 5);
-    auto s = sv_slice(src, n);
-    int curr = (s.find("&&") != string::npos)
-                 ? 0
-                 : ((s.find("||") != string::npos) ? 1 : -1);
-    auto sl = sv_slice(src, left);
-    auto sr = sv_slice(src, right);
-    int lb = (sl.find("&&") != string::npos)
-               ? 0
-               : ((sl.find("||") != string::npos) ? 1 : -1);
-    int rb = (sr.find("&&") != string::npos)
-               ? 0
-               : ((sr.find("||") != string::npos) ? 1 : -1);
-    if (lb != -1 && curr != lb) c++;
-    if (rb != -1 && curr != rb) c++;
-    c += c_count_bool_alternations(left, src);
-    c += c_count_bool_alternations(right, src);
+void CLikeGSGBuilder::collect_bool_chain(TSNode n, const string& src,
+                                         GSGNode& into, string_view& previous) {
+  for (const char* side : {"left", "right"}) {
+    if (side[0] == 'r') {
+      string_view op = c_bool_op(n);
+      if (op != previous) into.addl_cost += 1;
+      previous = op;
+    }
+    TSNode operand =
+      ts_node_child_by_field_name(n, side, side[0] == 'l' ? 4 : 5);
+    TSNode inner = c_unwrap_parens(operand);
+    if (!c_bool_op(inner).empty())
+      collect_bool_chain(inner, src, into, previous);
+    else
+      collect_expr(operand, src, into);
   }
-  return c;
 }
 
 void CLikeGSGBuilder::collect_expr(TSNode n, const string& src, GSGNode& into) {
   if (ts_node_is_null(n)) return;
   string ty = t(n);
   if (ty == "lambda_expression") return;
-  if (ty == "binary_expression") {
-    auto s = sv_slice(src, n);
-    into.addl_cost += (has_logical_token(string(s)) ? 1 : 0) +
-                      c_count_bool_alternations(n, src);
-    collect_expr(ts_node_child_by_field_name(n, "left", 4), src, into);
-    collect_expr(ts_node_child_by_field_name(n, "right", 5), src, into);
+  if (!c_bool_op(n).empty()) {
+    string_view previous;
+    collect_bool_chain(n, src, into, previous);
     return;
-  }
-  if (ty == "unary_expression") {
-    auto s = sv_slice(src, n);
-    if (!s.empty() && s.front() == '!') {
-      into.addl_cost += 1;
-      return;
-    }
   }
   if (ty == "conditional_expression") {
     GSGNode tern;

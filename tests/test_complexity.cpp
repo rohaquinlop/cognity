@@ -136,6 +136,9 @@ int main() {
     {"tests/src/javascript/test_if.js", 6},
     {"tests/src/javascript/test_switch_ternary.js", 3},
     {"tests/src/javascript/test_ternary_nested.js", 5},
+    {"tests/src/javascript/test_bool_ops.js", 9},
+    {"tests/src/javascript/test_arrow.js", 7},
+    {"tests/src/javascript/test_headers.js", 8},
   };
   for (const auto& [path, exp] : js_expected) {
     unsigned int got = 0;
@@ -156,6 +159,7 @@ int main() {
   // TypeScript
   const std::map<std::string, unsigned int> ts_expected = {
     {"tests/src/typescript/test_if.ts", 8},
+    {"tests/src/typescript/test_expr_rules.ts", 7},
   };
   for (const auto& [path, exp] : ts_expected) {
     unsigned int got = 0;
@@ -177,6 +181,7 @@ int main() {
   const std::map<std::string, unsigned int> c_expected = {
     {"tests/src/c/test_if.c", 4},
     {"tests/src/c/test_ternary_nested.c", 5},
+    {"tests/src/c/test_bool_ops.c", 9},
   };
   for (const auto& [path, exp] : c_expected) {
     unsigned int got = 0;
@@ -201,6 +206,7 @@ int main() {
     {"tests/src/cpp/test_lambda.cpp", 6},
     {"tests/src/cpp/test_lambda_sites.cpp", 6},
     {"tests/src/cpp/test_lambda_statements.cpp", 4},
+    {"tests/src/cpp/test_bool_ops.cpp", 4},
     {"tests/src/cpp/test_switch.cpp", 6},
     {"tests/src/cpp/test_ctor_dtor.cpp", 2},
     {"tests/src/cpp/test_method_out_of_class.cpp", 2},
