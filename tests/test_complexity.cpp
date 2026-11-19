@@ -1191,7 +1191,7 @@ int main() {
     {"tests/src/c/test_ternary_nested.c", 5},
     {"tests/src/c/test_bool_ops.c", 9},
     {"tests/src/c/test_bool_paren_comment.c", 1},
-    {"tests/src/c/test_recursion.c", 7},
+    {"tests/src/c/test_recursion.c", 8},
   };
   for (const auto& [path, exp] : c_expected) {
     unsigned int got = 0;

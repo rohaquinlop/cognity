@@ -78,6 +78,19 @@ TSNode declared_name(TSNode decl) {
   return decl;
 }
 
+bool declares_function(TSNode decl) {
+  while (!ts_node_is_null(decl) && (type_of(decl) == "pointer_declarator" ||
+                                    type_of(decl) == "reference_declarator")) {
+    TSNode inner = field(decl, "declarator");
+    if (ts_node_is_null(inner) && ts_node_named_child_count(decl) > 0)
+      inner = ts_node_named_child(decl, ts_node_named_child_count(decl) - 1);
+    decl = inner;
+  }
+  if (ts_node_is_null(decl) || type_of(decl) != "function_declarator")
+    return false;
+  return type_of(field(decl, "declarator")) != "parenthesized_declarator";
+}
+
 void collect_locals(TSNode n, const string& src,
                     std::unordered_set<string>& out) {
   if (ts_node_is_null(n)) return;
@@ -93,8 +106,7 @@ void collect_locals(TSNode n, const string& src,
         const char* f = ts_node_field_name_for_child(cur, i);
         if (!f || string_view(f) != "declarator") continue;
         TSNode decl = ts_node_child(cur, i);
-        if (t == "declaration" && type_of(decl) == "function_declarator")
-          continue;
+        if (t == "declaration" && declares_function(decl)) continue;
         TSNode name = declared_name(decl);
         if (!ts_node_is_null(name)) {
           const uint32_t a = ts_node_start_byte(name);

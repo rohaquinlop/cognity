@@ -27,3 +27,14 @@ int local_shadow(int n) {
   int (*local_shadow)(int) = 0;
   return local_shadow(n);
 }
+
+int f1(int n) {
+  int (*f1)(int);
+  f1 = 0;
+  return f1(n);
+}
+
+int *f2(int n) {
+  int *f2(int);
+  return f2(n);
+}
