@@ -28,8 +28,9 @@ Always use `scripts/check.sh`. CI, hooks and humans run the same commands.
 | `scripts/check.sh lint` | clang-tidy on lines changed vs merge-base with `origin/main` |
 | `scripts/check.sh all` | format, test, lint |
 
-Exit codes: `0` pass, `1` a check failed, `3` environment problem (configure or
-fetch failed, missing tool, lint base not found — run `git fetch origin`).
+Exit codes: `0` pass, `1` a check failed, `2` usage error, `3` environment
+problem (configure or fetch failed, missing tool, lint base not found — run
+`git fetch origin`).
 
 Run the binary: `build/check/cognity <paths> [-l py,js] [-mx N]`.
 
