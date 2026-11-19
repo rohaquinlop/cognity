@@ -1332,7 +1332,7 @@ int main() {
     {"tests/src/javascript/test_headers.js", 8},
     {"tests/src/javascript/test_bool_paren_comment.js", 1},
     {"tests/src/javascript/test_recursion.js", 8},
-    {"tests/src/javascript/test_recursion_bindings.js", 8},
+    {"tests/src/javascript/test_recursion_bindings.js", 11},
   };
   for (const auto& [path, exp] : js_expected) {
     unsigned int got = 0;

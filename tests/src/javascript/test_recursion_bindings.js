@@ -75,3 +75,19 @@ function m1(n) {
   return m1(n - 1);
 }
 [o.m1] = xs;
+
+function p1(n) {
+  return p1(n - 1);
+}
+({ x = p1() } = o);
+
+function q1(n) {
+  const { x = q1(n - 1) } = o;
+  return x;
+}
+
+function r1(o) {
+  for (r1 in o) {
+    r1();
+  }
+}
