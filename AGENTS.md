@@ -74,4 +74,4 @@ file → sourcing.cpp (language by extension, .gitignore, excludes)
 
 ## Skills
 
-- `.agents/skills/` holds the real skill files (`git-commit`, `create-pr`). `.claude/skills` is a symlink to `../.agents/skills`: do not replace it with a copy.
+- `.agents/skills/` holds the real skill files (`git-commit`, `create-pr`). `.claude/skills` is a symlink to `../.agents/skills`: do not replace it with a copy. On Windows, clone with `git clone -c core.symlinks=true` (needs Developer Mode or admin rights); otherwise the link is a plain file and Claude Code does not find the skills.
