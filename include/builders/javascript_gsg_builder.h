@@ -8,8 +8,11 @@ class JavaScriptGSGBuilder : public IBuilder {
   std::vector<GSGNode> build_functions(TSNode root,
                                        const std::string& source) override;
 
- private:
+  std::vector<RecursiveDef> recursive_defs(TSNode root,
+                                           const std::string& src) override;
   static SourceLoc loc(TSNode n);
+
+ private:
   static std::string_view slice(const std::string& src, TSNode n);
   static std::string_view name_of(TSNode n, const std::string& src);
 

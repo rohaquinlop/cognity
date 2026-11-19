@@ -114,7 +114,9 @@ set(SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/python_gsg_builder.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/python_recursion.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/javascript_gsg_builder.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/javascript_recursion.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/c_gsg_builder.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/c_recursion.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/gitignore.cpp"
 )
 
@@ -139,7 +141,9 @@ add_executable(cognity_tests
   src/builders/python_gsg_builder.cpp
   src/builders/python_recursion.cpp
   src/builders/javascript_gsg_builder.cpp
+  src/builders/javascript_recursion.cpp
   src/builders/c_gsg_builder.cpp
+  src/builders/c_recursion.cpp
   src/gitignore.cpp
   src/file_operations.cpp
   src/cli_arguments.cpp
