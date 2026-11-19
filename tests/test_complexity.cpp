@@ -1527,7 +1527,7 @@ int main() {
     {"tests/src/cpp/test_operator.cpp", 3},
     {"tests/src/cpp/test_lambda.cpp", 6},
     {"tests/src/cpp/test_lambda_sites.cpp", 6},
-    {"tests/src/cpp/test_lambda_statements.cpp", 4},
+    {"tests/src/cpp/test_lambda_statements.cpp", 6},
     {"tests/src/cpp/test_bool_ops.cpp", 4},
     {"tests/src/cpp/test_recursion.cpp", 3},
     {"tests/src/cpp/test_switch.cpp", 6},
@@ -1536,6 +1536,7 @@ int main() {
     {"tests/src/cpp/test_template_method.cpp", 2},
     {"tests/src/cpp/test_template_out_of_class.cpp", 3},
     {"tests/src/cpp/test_template_free.cpp", 2},
+    {"tests/src/cpp/test_for_range.cpp", 14},
   };
   for (const auto& [path, exp] : cpp_expected) {
     unsigned int got = 0;
