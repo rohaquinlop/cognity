@@ -114,7 +114,8 @@ class Resolver {
           scopes_[scope].names[text(p)].other = true;
       } else if (t == "member_expression" || t == "subscript_expression") {
         walk(p, scope, owner, cls);
-      } else if (t == "assignment_pattern") {
+      } else if (t == "assignment_pattern" ||
+                 t == "object_assignment_pattern") {
         stack.emplace_back(field(p, "right"), true);
         stack.emplace_back(field(p, "left"), false);
       } else if (t == "required_parameter" || t == "optional_parameter") {
