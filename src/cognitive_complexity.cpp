@@ -4,6 +4,9 @@
 #include "../include/builders/python_gsg_builder.h"
 #include "../include/gsg.h"
 
+#include <algorithm>
+#include <ranges>
+
 static inline LineComplexity build_line_complexity_from_loc(
   const SourceLoc& loc, unsigned int c) {
   return LineComplexity{loc.row, loc.start_col, loc.end_col, c};
@@ -98,6 +101,8 @@ std::vector<FunctionComplexity> functions_complexity_file(
   }
 
   auto func_nodes = builder->build_functions(root_node, source_code);
+  auto recursive = builder->recursive_defs(root_node, source_code);
+  std::ranges::sort(recursive, {}, &RecursiveDef::def_start_byte);
   for (const auto& fn : func_nodes) {
     unsigned int c = 0;
     std::vector<LineComplexity> lines;
@@ -105,6 +110,14 @@ std::vector<FunctionComplexity> functions_complexity_file(
       auto [cc, l] = compute_cognitive_complexity_gsg(ch, 0);
       c += cc;
       lines.insert(lines.end(), l.begin(), l.end());
+    }
+    auto first = std::ranges::lower_bound(recursive, fn.loc.start_byte, {},
+                                          &RecursiveDef::def_start_byte);
+    auto last = std::ranges::lower_bound(recursive, fn.loc.end_byte, {},
+                                         &RecursiveDef::def_start_byte);
+    for (const auto& r : std::ranges::subrange(first, last)) {
+      c += 1;
+      lines.push_back(build_line_complexity_from_loc(r.call, 1));
     }
     functions.push_back(FunctionComplexity{.name = fn.name,
                                            .complexity = c,

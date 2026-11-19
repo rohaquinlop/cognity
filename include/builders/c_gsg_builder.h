@@ -9,8 +9,11 @@ class CLikeGSGBuilder : public IBuilder {
   std::vector<GSGNode> build_functions(TSNode root,
                                        const std::string& source) override;
 
- private:
+  std::vector<RecursiveDef> recursive_defs(TSNode root,
+                                           const std::string& src) override;
   static SourceLoc loc(TSNode n);
+
+ private:
   static std::string_view slice(const std::string& src, TSNode n);
   static std::string function_name_from_declarator(TSNode decl,
                                                    const std::string& src);
