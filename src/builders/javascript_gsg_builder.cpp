@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -60,34 +61,6 @@ static bool js_is_bool(TSNode n) {
   return op == "&&" || op == "||";
 }
 
-void JavaScriptGSGBuilder::collect_bool_chain(TSNode n, const string& src,
-                                              GSGNode& into,
-                                              string_view& previous) {
-  std::vector<std::pair<TSNode, bool>> stack;
-  auto expand = [&stack](TSNode b) {
-    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5), false);
-    stack.emplace_back(b, true);
-    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4), false);
-  };
-  expand(n);
-  while (!stack.empty()) {
-    auto [cur, is_op] = stack.back();
-    stack.pop_back();
-    if (is_op) {
-      string_view op{
-        ts_node_type(ts_node_child_by_field_name(cur, "operator", 8))};
-      if (op != previous) into.addl_cost += 1;
-      previous = op;
-      continue;
-    }
-    TSNode inner = js_unwrap_parens(cur);
-    if (js_is_bool(inner))
-      expand(inner);
-    else
-      collect_expr(cur, src, into);
-  }
-}
-
 void JavaScriptGSGBuilder::collect_defaults(TSNode params, const string& src,
                                             GSGNode& into) {
   uint32_t m = ts_node_is_null(params) ? 0 : ts_node_named_child_count(params);
@@ -103,24 +76,48 @@ void JavaScriptGSGBuilder::collect_defaults(TSNode params, const string& src,
 
 void JavaScriptGSGBuilder::collect_expr(TSNode root, const string& src,
                                         GSGNode& into) {
-  std::vector<TSNode> stack{root};
+  enum class Step : uint8_t { Expr, Operand, Op, ChainEnd };
+  std::vector<std::pair<TSNode, Step>> stack{{root, Step::Expr}};
+  std::vector<string_view> previous;
+  auto expand = [&stack](TSNode b) {
+    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5),
+                       Step::Operand);
+    stack.emplace_back(b, Step::Op);
+    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4),
+                       Step::Operand);
+  };
   while (!stack.empty()) {
-    TSNode n = stack.back();
+    auto [n, step] = stack.back();
     stack.pop_back();
-    if (ts_node_is_null(n) || collect_special(n, src, into)) continue;
-    for (uint32_t i = ts_node_named_child_count(n); i > 0; --i)
-      stack.push_back(ts_node_named_child(n, i - 1));
+    if (step == Step::ChainEnd) {
+      previous.pop_back();
+    } else if (step == Step::Op) {
+      string_view op{
+        ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
+      if (op != previous.back()) into.addl_cost += 1;
+      previous.back() = op;
+    } else if (step == Step::Operand) {
+      TSNode inner = js_unwrap_parens(n);
+      if (js_is_bool(inner))
+        expand(inner);
+      else
+        stack.emplace_back(n, Step::Expr);
+    } else if (ts_node_is_null(n)) {
+      continue;
+    } else if (js_is_bool(n)) {
+      previous.emplace_back();
+      stack.emplace_back(n, Step::ChainEnd);
+      expand(n);
+    } else if (!collect_special(n, src, into)) {
+      for (uint32_t i = ts_node_named_child_count(n); i > 0; --i)
+        stack.emplace_back(ts_node_named_child(n, i - 1), Step::Expr);
+    }
   }
 }
 
 bool JavaScriptGSGBuilder::collect_special(TSNode n, const string& src,
                                            GSGNode& into) {
   string ty = t(n);
-  if (js_is_bool(n)) {
-    string_view previous;
-    collect_bool_chain(n, src, into, previous);
-    return true;
-  }
   if (ty == "arrow_function" || ty == "function_expression" ||
       ty == "generator_function") {
     GSGNode fn;

@@ -40,8 +40,6 @@ class PythonGSGBuilder : public IBuilder {
                                          const std::string& source);
   static TSNode clause_body(TSNode clause);
   static GSGNode expr_node(GSGNodeKind kind, TSNode loc_node);
-  static void collect_bool_chain(TSNode node, const std::string& source,
-                                 GSGNode& into, std::string& previous);
   static void collect_assignment(TSNode node, const std::string& source,
                                  GSGNode& into);
   static void collect_defaults(TSNode parameters, const std::string& source,

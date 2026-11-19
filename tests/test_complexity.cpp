@@ -88,6 +88,15 @@ static unsigned int row_cost(const std::vector<FunctionComplexity>& fns,
 
 static std::vector<std::pair<std::string, unsigned int>> recursion_cases() {
   return {
+    {R"py(def f(n):
+    [x for x in n for y in (f := n)]
+    return f(n)
+)py",
+     0},
+    {R"py(def g(n):
+    return [y for x in n for y in (z := g(x))] + z
+)py",
+     1},
     {R"py(def g():
     return f()
 def f():
@@ -1315,6 +1324,15 @@ int main() {
        Language::C, 0},
       {"int f(int a) {\n  return a" + repeat(" || a", depth) + ";\n}\n",
        Language::C, 1},
+      {"def f(a):\n    return " + repeat("a or (a + (", depth) + "a" +
+         repeat("))", depth) + "\n",
+       Language::Python, static_cast<unsigned int>(depth)},
+      {"function f(a) {\n  return " + repeat("a || (a + (", depth) + "a" +
+         repeat("))", depth) + ";\n}\n",
+       Language::JavaScript, static_cast<unsigned int>(depth)},
+      {"int f(int a) {\n  return " + repeat("a || (a + (", depth) + "a" +
+         repeat("))", depth) + ";\n}\n",
+       Language::C, static_cast<unsigned int>(depth)},
     };
     for (const auto& [code, lang, expected] : deep) {
       if (total(analyze_source(code, lang)) != expected) {
