@@ -261,8 +261,8 @@ void CLikeGSGBuilder::build_block_children(TSNode n, const string& src,
   for (int i = 0; i < m; ++i) {
     TSNode s = ts_node_named_child(n, i);
     string ty = t(s);
-    if (ty == "for_statement") {
-      for (string_view f : {"initializer", "condition", "update"})
+    if (ty == "for_statement" || ty == "for_range_loop") {
+      for (string_view f : {"initializer", "condition", "update", "right"})
         collect_lambdas_in_node(
           ts_node_child_by_field_name(s, f.data(), f.size()), src, out);
     } else if (ty == "if_statement" || ty == "while_statement" ||
@@ -276,7 +276,7 @@ void CLikeGSGBuilder::build_block_children(TSNode n, const string& src,
       build_if(s, src, out);
     else if (ty == "while_statement")
       out.emplace_back(build_while(s, src));
-    else if (ty == "for_statement")
+    else if (ty == "for_statement" || ty == "for_range_loop")
       out.emplace_back(build_for(s, src));
     else if (ty == "do_statement")
       out.emplace_back(build_do_while(s, src));
@@ -341,7 +341,7 @@ GSGNode CLikeGSGBuilder::build_for(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::For;
   g.loc = loc(n);
-  for (string_view f : {"initializer", "condition", "update"})
+  for (string_view f : {"initializer", "condition", "update", "right"})
     push_header(g, ts_node_child_by_field_name(n, f.data(), f.size()), src);
   build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
                        g.children);
