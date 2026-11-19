@@ -69,5 +69,5 @@ file → sourcing.cpp (language by extension, .gitignore, excludes)
 ## Agent hooks (`.claude/settings.json`)
 
 - PostToolUse (`Edit|Write|MultiEdit`): `scripts/hooks/format-file.sh` formats the edited C/C++ file.
-- Stop: `scripts/hooks/verify.sh` runs `scripts/check.sh all` when files under `src/`, `include/`, `tests/`, `scripts/`, `CMakeLists.txt` or `.clang-*` differ from the merge-base. A failure blocks the stop once and shows the output. If the retry still fails, the hook does not block again; it shows the failure to the user. Environment problems only warn. A tree that already passed is not checked again.
+- Stop: `scripts/hooks/verify.sh` runs `scripts/check.sh all` when files under `src/`, `include/`, `tests/`, `scripts/`, `CMakeLists.txt`, `.clang-format` or `.clang-tidy` differ from the merge-base. A failure blocks the stop once and shows the output. If the retry still fails, the hook does not block again; it shows the failure to the user. Environment problems only warn. A tree that already passed is not checked again.
 - Permissions: `.claude/settings.json` pre-approves `scripts/check.sh`, `cmake`, `ctest` and the pinned `uvx clang-format` / `uvx clang-tidy` calls.
