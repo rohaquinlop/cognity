@@ -210,9 +210,10 @@ void CLikeGSGBuilder::build_switch(TSNode s, const string& src,
   GSGNode sw;
   sw.kind = GSGNodeKind::Switch;
   sw.loc = loc(s);
-  uint32_t cn = ts_node_named_child_count(s);
+  TSNode body = ts_node_child_by_field_name(s, "body", 4);
+  uint32_t cn = ts_node_is_null(body) ? 0 : ts_node_named_child_count(body);
   for (uint32_t j = 0; j < cn; ++j) {
-    TSNode cc = ts_node_named_child(s, j);
+    TSNode cc = ts_node_named_child(body, j);
     string cty = t(cc);
     if (cty == "case_statement" || cty == "default_statement") {
       GSGNode cs;
