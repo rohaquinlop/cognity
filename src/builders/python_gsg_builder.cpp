@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -171,40 +172,41 @@ TSNode PythonGSGBuilder::clause_body(TSNode clause) {
 std::vector<GSGNode> PythonGSGBuilder::build_functions(TSNode root,
                                                        const string& source) {
   std::vector<GSGNode> funcs;
-  int n = ts_node_named_child_count(root);
-  for (int i = 0; i < n; ++i) {
-    TSNode child = ts_node_named_child(root, i);
-    auto t = node_type(child);
-    if (t == "function_definition") {
-      funcs.emplace_back(build_function(child, source));
-    } else if (t == "decorated_definition") {
-      TSNode def = ts_node_child_by_field_name(child, "definition", 10);
-      if (!ts_node_is_null(def) && node_type(def) == "function_definition")
-        funcs.emplace_back(build_function(def, source));
-      else if (!ts_node_is_null(def) && node_type(def) == "class_definition") {
-        TSNode body = ts_node_child_by_field_name(def, "body", 4);
-        if (!ts_node_is_null(body)) {
-          int m = ts_node_named_child_count(body);
-          for (int j = 0; j < m; ++j) {
-            TSNode member = ts_node_named_child(body, j);
-            if (node_type(member) == "function_definition")
-              funcs.emplace_back(build_function(member, source));
-          }
-        }
-      }
-    } else if (t == "class_definition") {
-      TSNode body = ts_node_child_by_field_name(child, "body", 4);
-      if (!ts_node_is_null(body)) {
-        int m = ts_node_named_child_count(body);
-        for (int j = 0; j < m; ++j) {
-          TSNode member = ts_node_named_child(body, j);
-          if (node_type(member) == "function_definition")
-            funcs.emplace_back(build_function(member, source));
-        }
-      }
-    }
-  }
+  collect_functions(root, source, "", funcs);
   return funcs;
+}
+
+void PythonGSGBuilder::collect_functions(TSNode node, const string& source,
+                                         const string& qual,
+                                         std::vector<GSGNode>& out) {
+  static const std::vector<string_view> suites = {
+    "module",          "block",         "if_statement",   "for_statement",
+    "while_statement", "try_statement", "with_statement", "match_statement",
+    "elif_clause",     "else_clause",   "except_clause",  "except_group_clause",
+    "finally_clause",  "case_clause"};
+  string t = node_type(node);
+  if (t == "decorated_definition") {
+    TSNode def = ts_node_child_by_field_name(node, "definition", 10);
+    if (!ts_node_is_null(def)) collect_functions(def, source, qual, out);
+    return;
+  }
+  if (t == "function_definition") {
+    GSGNode f = build_function(node, source);
+    if (!qual.empty()) f.name = qual + "::" + f.name;
+    out.emplace_back(std::move(f));
+    return;
+  }
+  if (t == "class_definition") {
+    string name(get_identifier(node, source));
+    string q = qual.empty() ? name : qual + "::" + name;
+    collect_functions(ts_node_child_by_field_name(node, "body", 4), source, q,
+                      out);
+    return;
+  }
+  if (std::ranges::find(suites, t) == suites.end()) return;
+  uint32_t n = ts_node_named_child_count(node);
+  for (uint32_t i = 0; i < n; ++i)
+    collect_functions(ts_node_named_child(node, i), source, qual, out);
 }
 
 GSGNode PythonGSGBuilder::build_function(TSNode node, const string& source) {

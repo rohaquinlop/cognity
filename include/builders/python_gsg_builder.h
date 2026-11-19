@@ -9,6 +9,8 @@ class PythonGSGBuilder : public IBuilder {
                                        const std::string& source) override;
 
  private:
+  void collect_functions(TSNode node, const std::string& source,
+                         const std::string& qual, std::vector<GSGNode>& out);
   GSGNode build_function(TSNode node, const std::string& source);
   void build_function_body(TSNode def, const std::string& source,
                            std::vector<GSGNode>& out);

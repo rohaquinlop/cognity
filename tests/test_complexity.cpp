@@ -110,6 +110,8 @@ int main() {
     {"tests/src/python/test_case_guard.py", 6},
     {"tests/src/python/test_decorator_rule.py", 12},
     {"tests/src/python/test_definition_headers.py", 3},
+    {"tests/src/python/test_function_discovery.py", 2},
+    {"tests/src/python/test_nested_definitions.py", 4},
   };
 
   bool ok = true;
