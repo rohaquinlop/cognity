@@ -22,7 +22,7 @@ static std::string read_file(const std::filesystem::path& p) {
   return data;
 }
 
-static unsigned int compute_file_complexity_lang(
+static std::vector<FunctionComplexity> analyze_file(
   const std::filesystem::path& rel, Language lang) {
   // Resolve path relative to project root (source dir). Use this source file
   // location to find the repository root regardless of current working dir.
@@ -50,13 +50,27 @@ static unsigned int compute_file_complexity_lang(
       break;
     default:
       ts_parser_delete(parser);
-      return 0;
+      return {};
   }
   std::string src = read_file(p);
   auto fns = functions_complexity_file(src, parser, lang);
   ts_parser_delete(parser);
+  return fns;
+}
+
+static unsigned int compute_file_complexity_lang(
+  const std::filesystem::path& rel, Language lang) {
   unsigned int sum = 0;
-  for (const auto& fn : fns) sum += fn.complexity;
+  for (const auto& fn : analyze_file(rel, lang)) sum += fn.complexity;
+  return sum;
+}
+
+static unsigned int row_cost(const std::vector<FunctionComplexity>& fns,
+                             unsigned int row) {
+  unsigned int sum = 0;
+  for (const auto& fn : fns)
+    for (const auto& line : fn.lines)
+      if (line.row == row) sum += line.complexity;
   return sum;
 }
 
@@ -68,7 +82,7 @@ int main() {
     {"tests/src/python/test_for.py", 5},
     {"tests/src/python/test_for_assign.py", 1},
     {"tests/src/python/test_if.py", 3},
-    {"tests/src/python/test_match.py", 0},
+    {"tests/src/python/test_match.py", 1},
     {"tests/src/python/test_multiple_func.py", 0},
     {"tests/src/python/test_nested_func.py", 2},
     {"tests/src/python/test_recursive.py", 0},
@@ -80,6 +94,13 @@ int main() {
     {"tests/src/python/test_decorator.py", 1},
     {"tests/src/python/test_while.py", 1},
     {"tests/src/python/test.py", 9},
+    {"tests/src/python/test_elif_else.py", 22},
+    {"tests/src/python/test_finally_with.py", 2},
+    {"tests/src/python/test_match_case.py", 7},
+    {"tests/src/python/test_loop_try_else.py", 6},
+    {"tests/src/python/test_nested_def_nesting.py", 6},
+    {"tests/src/python/test_except_match_nesting.py", 6},
+    {"tests/src/python/test_ternary_nesting.py", 3},
   };
 
   bool ok = true;
@@ -101,8 +122,8 @@ int main() {
 
   // JavaScript (current implementation expectations)
   const std::map<std::string, unsigned int> js_expected = {
-    {"tests/src/javascript/test_if.js", 4},
-    {"tests/src/javascript/test_switch_ternary.js", 0},
+    {"tests/src/javascript/test_if.js", 6},
+    {"tests/src/javascript/test_switch_ternary.js", 3},
   };
   for (const auto& [path, exp] : js_expected) {
     unsigned int got = 0;
@@ -122,7 +143,7 @@ int main() {
 
   // TypeScript
   const std::map<std::string, unsigned int> ts_expected = {
-    {"tests/src/typescript/test_if.ts", 6},
+    {"tests/src/typescript/test_if.ts", 8},
   };
   for (const auto& [path, exp] : ts_expected) {
     unsigned int got = 0;
@@ -142,7 +163,7 @@ int main() {
 
   // C
   const std::map<std::string, unsigned int> c_expected = {
-    {"tests/src/c/test_if.c", 2},
+    {"tests/src/c/test_if.c", 4},
   };
   for (const auto& [path, exp] : c_expected) {
     unsigned int got = 0;
@@ -162,14 +183,14 @@ int main() {
 
   // C++
   const std::map<std::string, unsigned int> cpp_expected = {
-    {"tests/src/cpp/test_if.cpp", 4},
+    {"tests/src/cpp/test_if.cpp", 8},
     {"tests/src/cpp/test_operator.cpp", 3},
-    {"tests/src/cpp/test_lambda.cpp", 8},
+    {"tests/src/cpp/test_lambda.cpp", 6},
     {"tests/src/cpp/test_ctor_dtor.cpp", 2},
     {"tests/src/cpp/test_method_out_of_class.cpp", 2},
     {"tests/src/cpp/test_template_method.cpp", 2},
     {"tests/src/cpp/test_template_out_of_class.cpp", 3},
-    {"tests/src/cpp/test_template_free.cpp", 1},
+    {"tests/src/cpp/test_template_free.cpp", 2},
   };
   for (const auto& [path, exp] : cpp_expected) {
     unsigned int got = 0;
@@ -183,6 +204,20 @@ int main() {
     if (got != exp) {
       std::cerr << "Mismatch for " << path << ": expected " << exp << ", got "
                 << got << "\n";
+      ok = false;
+    }
+  }
+
+  const auto try_nested =
+    analyze_file("tests/src/python/test_try_nested.py", Language::Python);
+  for (const auto& [row, exp] : std::map<unsigned int, unsigned int>{
+         {16, 1},
+         {20, 1},
+       }) {
+    unsigned int got = row_cost(try_nested, row);
+    if (got != exp) {
+      std::cerr << "Line cost mismatch for test_try_nested.py line " << row + 1
+                << ": expected " << exp << ", got " << got << "\n";
       ok = false;
     }
   }

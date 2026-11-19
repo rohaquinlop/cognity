@@ -9,25 +9,36 @@ class PythonGSGBuilder : public IBuilder {
                                        const std::string& source) override;
 
  private:
-  // node mappers
   GSGNode build_function(TSNode node, const std::string& source);
   void build_block_children(TSNode block, const std::string& source,
-                            std::vector<GSGNode>& out, int nesting);
-  GSGNode build_for(TSNode node, const std::string& source, int nesting);
-  GSGNode build_while(TSNode node, const std::string& source, int nesting);
-  GSGNode build_if(TSNode node, const std::string& source, int nesting);
+                            std::vector<GSGNode>& out);
+  void build_simple_statement(TSNode stmt, const std::string& source,
+                              std::vector<GSGNode>& out);
+  void build_loop(TSNode node, const std::string& source,
+                  std::vector<GSGNode>& out);
+  void build_if(TSNode node, const std::string& source,
+                std::vector<GSGNode>& out);
   void build_try(TSNode node, const std::string& source,
-                 std::vector<GSGNode>& out, int nesting);
+                 std::vector<GSGNode>& out);
+  void build_match(TSNode node, const std::string& source,
+                   std::vector<GSGNode>& out);
+  void push_else(TSNode else_clause, const std::string& source,
+                 std::vector<GSGNode>& out);
 
-  // helpers
   static SourceLoc loc_from_node(TSNode node);
   static std::string_view slice_source(const std::string& source, TSNode node);
   static std::string_view get_identifier(TSNode node,
                                          const std::string& source);
+  static TSNode clause_body(TSNode clause);
+  static GSGNode expr_node(GSGNodeKind kind, TSNode loc_node);
   static unsigned int count_bool_operators(TSNode node,
                                            const std::string& source);
-  static unsigned int count_bool_ops_expr(TSNode node, int nesting,
-                                          const std::string& source);
+  static void collect_expr(TSNode node, const std::string& source,
+                           GSGNode& into);
+  static void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,
+                        const std::string& source);
+  static void push_header(GSGNode& stmt, TSNode expr,
+                          const std::string& source);
 };
 
 #endif

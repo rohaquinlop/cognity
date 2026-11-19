@@ -14,90 +14,51 @@ compute_cognitive_complexity_gsg(const GSGNode& node, int nesting_level) {
   unsigned int complexity = 0;
   std::vector<LineComplexity> lines;
 
-  auto count_children = [&](int next_nesting) {
+  auto add = [&](unsigned int c) {
+    if (!c) return;
+    complexity += c;
+    lines.push_back(build_line_complexity_from_loc(node.loc, c));
+  };
+  auto count_children = [&](int body_nesting) {
     for (const auto& ch : node.children) {
-      auto [c, l] = compute_cognitive_complexity_gsg(ch, next_nesting);
+      int next =
+        (ch.kind == GSGNodeKind::Header) ? nesting_level : body_nesting;
+      auto [c, l] = compute_cognitive_complexity_gsg(ch, next);
       complexity += c;
       if (!l.empty()) lines.insert(lines.end(), l.begin(), l.end());
     }
   };
+  const auto level = static_cast<unsigned int>(nesting_level);
 
   switch (node.kind) {
-    case GSGNodeKind::Function: {
-      if (node.children.size() == 2 &&
-          node.children[0].kind == GSGNodeKind::Function &&
-          node.children[1].kind == GSGNodeKind::Expr &&
-          node.children[1].addl_cost == 0) {
-        const auto& inner = node.children[0];
-        for (const auto& ich : inner.children) {
-          int next_nest = (ich.kind == GSGNodeKind::Function)
-                            ? nesting_level + 1
-                            : nesting_level;
-          auto [c2, l2] = compute_cognitive_complexity_gsg(ich, next_nest);
-          complexity += c2;
-          if (!l2.empty()) lines.insert(lines.end(), l2.begin(), l2.end());
-        }
-        break;
-      }
-      for (const auto& ch : node.children) {
-        int next_nest = (ch.kind == GSGNodeKind::Function) ? nesting_level + 1
-                                                           : nesting_level;
-        auto [c, l] = compute_cognitive_complexity_gsg(ch, next_nest);
-        complexity += c;
-        if (!l.empty()) lines.insert(lines.end(), l.begin(), l.end());
-      }
-      break;
-    }
     case GSGNodeKind::For:
     case GSGNodeKind::While:
-    case GSGNodeKind::DoWhile: {
-      unsigned int stmt = 1 + nesting_level + node.addl_cost;
-      complexity += stmt;
-      lines.push_back(build_line_complexity_from_loc(node.loc, stmt));
-      count_children(nesting_level + 1);
-      break;
-    }
-    case GSGNodeKind::If: {
-      unsigned int stmt = 1 + nesting_level + node.addl_cost;
-      complexity += stmt;
-      lines.push_back(build_line_complexity_from_loc(node.loc, stmt));
-      count_children(nesting_level + 1);
-      break;
-    }
-    case GSGNodeKind::ElseIf: {
-      unsigned int stmt = node.addl_cost;
-      complexity += stmt;
-      lines.push_back(build_line_complexity_from_loc(node.loc, stmt));
-      count_children(nesting_level + 1);
-      break;
-    }
-    case GSGNodeKind::Try:
-    case GSGNodeKind::Switch: {
-      count_children(nesting_level);
-      break;
-    }
-    case GSGNodeKind::Finally:
-    case GSGNodeKind::Case:
-    case GSGNodeKind::Else: {
-      count_children(nesting_level + 1);
-      break;
-    }
-    case GSGNodeKind::With:
+    case GSGNodeKind::DoWhile:
+    case GSGNodeKind::If:
     case GSGNodeKind::Except:
-    case GSGNodeKind::Expr:
-    case GSGNodeKind::Ternary: {
-      if (node.addl_cost) {
-        complexity += node.addl_cost;
-        lines.push_back(
-          build_line_complexity_from_loc(node.loc, node.addl_cost));
-      }
+    case GSGNodeKind::Catch:
+      add(1 + level + node.addl_cost);
       count_children(nesting_level + 1);
       break;
-    }
-    default: {
+    case GSGNodeKind::ElseIf:
+    case GSGNodeKind::Else:
+      add(1 + node.addl_cost);
+      count_children(nesting_level + 1);
+      break;
+    case GSGNodeKind::Switch:
+    case GSGNodeKind::Ternary:
+      add(1 + level + node.addl_cost);
       count_children(nesting_level);
       break;
-    }
+    case GSGNodeKind::Function:
+    case GSGNodeKind::Case:
+      add(node.addl_cost);
+      count_children(nesting_level + 1);
+      break;
+    default:
+      add(node.addl_cost);
+      count_children(nesting_level);
+      break;
   }
 
   return {complexity, lines};
@@ -135,7 +96,13 @@ std::vector<FunctionComplexity> functions_complexity_file(
 
   auto func_nodes = builder->build_functions(root_node, source_code);
   for (const auto& fn : func_nodes) {
-    auto [c, lines] = compute_cognitive_complexity_gsg(fn, 0);
+    unsigned int c = 0;
+    std::vector<LineComplexity> lines;
+    for (const auto& ch : fn.children) {
+      auto [cc, l] = compute_cognitive_complexity_gsg(ch, 0);
+      c += cc;
+      lines.insert(lines.end(), l.begin(), l.end());
+    }
     functions.push_back(FunctionComplexity{.name = fn.name,
                                            .complexity = c,
                                            .row = fn.loc.row,
