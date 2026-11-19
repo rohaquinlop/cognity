@@ -1,21 +1,21 @@
+#include "../include/cognitive_complexity.h"
 #include "../include/builders/c_gsg_builder.h"
 #include "../include/builders/javascript_gsg_builder.h"
 #include "../include/builders/python_gsg_builder.h"
-#include "../include/cognitive_complexity.h"
 #include "../include/gsg.h"
 
 static inline LineComplexity build_line_complexity_from_loc(
-    const SourceLoc &loc, unsigned int c) {
+  const SourceLoc& loc, unsigned int c) {
   return LineComplexity{loc.row, loc.start_col, loc.end_col, c};
 }
 
 std::pair<unsigned int, std::vector<LineComplexity>>
-compute_cognitive_complexity_gsg(const GSGNode &node, int nesting_level) {
+compute_cognitive_complexity_gsg(const GSGNode& node, int nesting_level) {
   unsigned int complexity = 0;
   std::vector<LineComplexity> lines;
 
   auto count_children = [&](int next_nesting) {
-    for (const auto &ch : node.children) {
+    for (const auto& ch : node.children) {
       auto [c, l] = compute_cognitive_complexity_gsg(ch, next_nesting);
       complexity += c;
       if (!l.empty()) lines.insert(lines.end(), l.begin(), l.end());
@@ -28,18 +28,18 @@ compute_cognitive_complexity_gsg(const GSGNode &node, int nesting_level) {
           node.children[0].kind == GSGNodeKind::Function &&
           node.children[1].kind == GSGNodeKind::Expr &&
           node.children[1].addl_cost == 0) {
-        const auto &inner = node.children[0];
-        for (const auto &ich : inner.children) {
+        const auto& inner = node.children[0];
+        for (const auto& ich : inner.children) {
           int next_nest = (ich.kind == GSGNodeKind::Function)
-                              ? nesting_level + 1
-                              : nesting_level;
+                            ? nesting_level + 1
+                            : nesting_level;
           auto [c2, l2] = compute_cognitive_complexity_gsg(ich, next_nest);
           complexity += c2;
           if (!l2.empty()) lines.insert(lines.end(), l2.begin(), l2.end());
         }
         break;
       }
-      for (const auto &ch : node.children) {
+      for (const auto& ch : node.children) {
         int next_nest = (ch.kind == GSGNodeKind::Function) ? nesting_level + 1
                                                            : nesting_level;
         auto [c, l] = compute_cognitive_complexity_gsg(ch, next_nest);
@@ -89,7 +89,7 @@ compute_cognitive_complexity_gsg(const GSGNode &node, int nesting_level) {
       if (node.addl_cost) {
         complexity += node.addl_cost;
         lines.push_back(
-            build_line_complexity_from_loc(node.loc, node.addl_cost));
+          build_line_complexity_from_loc(node.loc, node.addl_cost));
       }
       count_children(nesting_level + 1);
       break;
@@ -120,10 +120,10 @@ std::unique_ptr<IBuilder> make_builder(Language lang) {
 }
 
 std::vector<FunctionComplexity> functions_complexity_file(
-    const std::string &source_code, TSParser *parser, Language lang) {
+  const std::string& source_code, TSParser* parser, Language lang) {
   std::vector<FunctionComplexity> functions;
 
-  TSTree *tree = ts_parser_parse_string(parser, NULL, source_code.c_str(),
+  TSTree* tree = ts_parser_parse_string(parser, NULL, source_code.c_str(),
                                         strlen(source_code.c_str()));
   TSNode root_node = ts_tree_root_node(tree);
 
@@ -134,7 +134,7 @@ std::vector<FunctionComplexity> functions_complexity_file(
   }
 
   auto func_nodes = builder->build_functions(root_node, source_code);
-  for (const auto &fn : func_nodes) {
+  for (const auto& fn : func_nodes) {
     auto [c, lines] = compute_cognitive_complexity_gsg(fn, 0);
     functions.push_back(FunctionComplexity{.name = fn.name,
                                            .complexity = c,

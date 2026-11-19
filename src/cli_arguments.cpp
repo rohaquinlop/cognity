@@ -5,7 +5,7 @@
 #include "../include/cli_arguments.h"
 #include "../include/gsg.h"
 
-std::vector<std::string> args_to_string(char **args, int total) {
+std::vector<std::string> args_to_string(char** args, int total) {
   std::vector<std::string> strings;
 
   for (int i = 1; i < total; i++) {
@@ -16,41 +16,41 @@ std::vector<std::string> args_to_string(char **args, int total) {
   return strings;
 }
 
-bool is_max_complexity(std::string &s) {
+bool is_max_complexity(std::string& s) {
   return s == "--max-complexity" or s == "-mx";
 }
 
-bool is_quiet(std::string &s) { return s == "--quiet" or s == "-q"; }
+bool is_quiet(std::string& s) { return s == "--quiet" or s == "-q"; }
 
-bool is_ignore_complexity(std::string &s) {
+bool is_ignore_complexity(std::string& s) {
   return s == "--ignore-complexity" or s == "-i";
 }
 
-bool is_detail(std::string &s) { return s == "--detail" or s == "-d"; }
+bool is_detail(std::string& s) { return s == "--detail" or s == "-d"; }
 
-bool is_sort(std::string &s) { return s == "--sort" or s == "-s"; }
+bool is_sort(std::string& s) { return s == "--sort" or s == "-s"; }
 
-bool is_output_csv(std::string &s) {
+bool is_output_csv(std::string& s) {
   return s == "--output-csv" or s == "-csv";
 }
 
-bool is_output_json(std::string &s) {
+bool is_output_json(std::string& s) {
   return s == "--output-json" or s == "-json";
 }
 
-static bool is_lang(std::string &s) { return s == "--lang" || s == "-l"; }
+static bool is_lang(std::string& s) { return s == "--lang" || s == "-l"; }
 
-static bool is_max_fn_width(std::string &s) {
+static bool is_max_fn_width(std::string& s) {
   return s == "--max-fn-width" || s == "-fw";
 }
 
-static bool is_help(std::string &s) { return s == "--help" || s == "-h"; }
+static bool is_help(std::string& s) { return s == "--help" || s == "-h"; }
 
-static bool is_version(std::string &s) { return s == "--version"; }
+static bool is_version(std::string& s) { return s == "--version"; }
 
-static bool is_exclude(std::string &s) { return s == "--exclude" || s == "-x"; }
+static bool is_exclude(std::string& s) { return s == "--exclude" || s == "-x"; }
 
-bool is_argument(std::string &s) {
+bool is_argument(std::string& s) {
   return is_max_complexity(s) or is_quiet(s) or is_ignore_complexity(s) or
          is_detail(s) or is_sort(s) or is_output_csv(s) or is_output_json(s) ||
          is_lang(s) || is_exclude(s) || is_max_fn_width(s) || is_help(s) ||
@@ -71,15 +71,14 @@ static Language language_from_token(std::string tok) {
   return Language::Unknown;
 }
 
-static void parse_languages_list(const std::string &value,
-                                 std::vector<Language> &out) {
+static void parse_languages_list(const std::string& value,
+                                 std::vector<Language>& out) {
   size_t start = 0;
   while (start <= value.size()) {
     size_t comma = value.find(',', start);
-    std::string tok =
-        value.substr(start, comma == std::string::npos ? std::string::npos
-                                                       : (comma - start));
-    auto trim = [](std::string &s) {
+    std::string tok = value.substr(
+      start, comma == std::string::npos ? std::string::npos : (comma - start));
+    auto trim = [](std::string& s) {
       size_t a = s.find_first_not_of(" \t\n");
       size_t b = s.find_last_not_of(" \t\n");
       if (a == std::string::npos) {
@@ -102,7 +101,7 @@ static void parse_languages_list(const std::string &value,
   }
 }
 
-CLI_ARGUMENTS load_from_vs_arguments(std::vector<std::string> &arguments) {
+CLI_ARGUMENTS load_from_vs_arguments(std::vector<std::string>& arguments) {
   int i;
   bool reading_paths = true;
   std::vector<std::string> paths;
@@ -143,17 +142,17 @@ CLI_ARGUMENTS load_from_vs_arguments(std::vector<std::string> &arguments) {
     if (is_max_complexity(arguments[i])) {
       if (++i >= arguments.size())
         throw std::invalid_argument(
-            "Expected max cognitive complexity allowed, use '-mx $number'");
+          "Expected max cognitive complexity allowed, use '-mx $number'");
 
       try {
         max_complexity_allowed = std::stoi(arguments[i]);
         if (max_complexity_allowed < 0) max_complexity_allowed = 0;
-      } catch (const std::invalid_argument &e) {
+      } catch (const std::invalid_argument& e) {
         throw std::invalid_argument(
-            "Expected a number as max complexity allowed");
-      } catch (const std::out_of_range &e) {
+          "Expected a number as max complexity allowed");
+      } catch (const std::out_of_range& e) {
         throw std::invalid_argument(
-            "Expected a number as max complexity allowed");
+          "Expected a number as max complexity allowed");
       }
     } else if (is_quiet(arguments[i]))
       quiet = true;
@@ -169,13 +168,13 @@ CLI_ARGUMENTS load_from_vs_arguments(std::vector<std::string> &arguments) {
       if (++i >= arguments.size())
         throw std::invalid_argument("Expected path list after --exclude/-x");
       size_t start = 0;
-      const std::string &value = arguments[i];
+      const std::string& value = arguments[i];
       while (start <= value.size()) {
         size_t comma = value.find(',', start);
         std::string tok =
-            value.substr(start, comma == std::string::npos ? std::string::npos
-                                                           : (comma - start));
-        auto trim = [](std::string &s) {
+          value.substr(start, comma == std::string::npos ? std::string::npos
+                                                         : (comma - start));
+        auto trim = [](std::string& s) {
           size_t a = s.find_first_not_of(" \t\n");
           size_t b = s.find_last_not_of(" \t\n");
           if (a == std::string::npos) {
@@ -195,14 +194,14 @@ CLI_ARGUMENTS load_from_vs_arguments(std::vector<std::string> &arguments) {
       try {
         max_function_width = std::stoi(arguments[i]);
         if (max_function_width < 0) max_function_width = 0;
-      } catch (const std::invalid_argument &e) {
+      } catch (const std::invalid_argument& e) {
         throw std::invalid_argument(
-            "Expected a number after --max-fn-width/-fw");
+          "Expected a number after --max-fn-width/-fw");
       }
     } else if (is_detail(arguments[i])) {
       if (++i >= arguments.size())
         throw std::invalid_argument(
-            "Expected detail level, use '-d low' or '-d normal'");
+          "Expected detail level, use '-d low' or '-d normal'");
 
       if (arguments[i] == "low")
         detail = LOW;
@@ -210,11 +209,11 @@ CLI_ARGUMENTS load_from_vs_arguments(std::vector<std::string> &arguments) {
         detail = NORMAL;
       else
         throw std::invalid_argument(
-            "Invalid detail level, use 'low' or 'normal'");
+          "Invalid detail level, use 'low' or 'normal'");
     } else if (is_sort(arguments[i])) {
       if (++i >= arguments.size())
         throw std::invalid_argument(
-            "Expected sort order, use '-s asc' '-s desc' '-s name'");
+          "Expected sort order, use '-s asc' '-s desc' '-s name'");
 
       if (arguments[i] == "asc")
         sort = ASC;
@@ -224,7 +223,7 @@ CLI_ARGUMENTS load_from_vs_arguments(std::vector<std::string> &arguments) {
         sort = NAME;
       else
         throw std::invalid_argument(
-            "Invalid sort order, use '-s asc' '-s desc' '-s name'");
+          "Invalid sort order, use '-s asc' '-s desc' '-s name'");
     } else if (is_output_csv(arguments[i]))
       output_csv = true;
     else if (is_output_json(arguments[i]))
@@ -249,7 +248,7 @@ CLI_ARGUMENTS load_from_vs_arguments(std::vector<std::string> &arguments) {
                        langs_filter};
 }
 
-CLI_PARSE_RESULT parse_arguments_relaxed(std::vector<std::string> &arguments) {
+CLI_PARSE_RESULT parse_arguments_relaxed(std::vector<std::string>& arguments) {
   CLI_PARSE_RESULT res;
   int i;
   bool reading_paths = true;
@@ -281,17 +280,17 @@ CLI_PARSE_RESULT parse_arguments_relaxed(std::vector<std::string> &arguments) {
     if (is_max_complexity(arguments[i])) {
       if (++i >= arguments.size())
         throw std::invalid_argument(
-            "Expected max cognitive complexity allowed, use '-mx $number'");
+          "Expected max cognitive complexity allowed, use '-mx $number'");
       try {
         max_complexity_allowed = std::stoi(arguments[i]);
         if (max_complexity_allowed < 0) max_complexity_allowed = 0;
         res.has_max_complexity = true;
-      } catch (const std::invalid_argument &e) {
+      } catch (const std::invalid_argument& e) {
         throw std::invalid_argument(
-            "Expected a number as max complexity allowed");
-      } catch (const std::out_of_range &e) {
+          "Expected a number as max complexity allowed");
+      } catch (const std::out_of_range& e) {
         throw std::invalid_argument(
-            "Expected a number as max complexity allowed");
+          "Expected a number as max complexity allowed");
       }
     } else if (is_quiet(arguments[i])) {
       quiet = true;
@@ -314,13 +313,13 @@ CLI_PARSE_RESULT parse_arguments_relaxed(std::vector<std::string> &arguments) {
       if (++i >= arguments.size())
         throw std::invalid_argument("Expected path list after --exclude/-x");
       size_t start = 0;
-      const std::string &value = arguments[i];
+      const std::string& value = arguments[i];
       while (start <= value.size()) {
         size_t comma = value.find(',', start);
         std::string tok =
-            value.substr(start, comma == std::string::npos ? std::string::npos
-                                                           : (comma - start));
-        auto trim = [](std::string &s) {
+          value.substr(start, comma == std::string::npos ? std::string::npos
+                                                         : (comma - start));
+        auto trim = [](std::string& s) {
           size_t a = s.find_first_not_of(" \t\n");
           size_t b = s.find_last_not_of(" \t\n");
           if (a == std::string::npos) {
@@ -342,26 +341,26 @@ CLI_PARSE_RESULT parse_arguments_relaxed(std::vector<std::string> &arguments) {
         max_function_width = std::stoi(arguments[i]);
         if (max_function_width < 0) max_function_width = 0;
         res.has_max_fn_width = true;
-      } catch (const std::invalid_argument &e) {
+      } catch (const std::invalid_argument& e) {
         throw std::invalid_argument(
-            "Expected a number after --max-fn-width/-fw");
+          "Expected a number after --max-fn-width/-fw");
       }
     } else if (is_detail(arguments[i])) {
       if (++i >= arguments.size())
         throw std::invalid_argument(
-            "Expected detail level, use '-d low' or '-d normal'");
+          "Expected detail level, use '-d low' or '-d normal'");
       if (arguments[i] == "low")
         detail = LOW;
       else if (arguments[i] == "normal")
         detail = NORMAL;
       else
         throw std::invalid_argument(
-            "Invalid detail level, use 'low' or 'normal'");
+          "Invalid detail level, use 'low' or 'normal'");
       res.has_detail = true;
     } else if (is_sort(arguments[i])) {
       if (++i >= arguments.size())
         throw std::invalid_argument(
-            "Expected sort order, use '-s asc' '-s desc' '-s name'");
+          "Expected sort order, use '-s asc' '-s desc' '-s name'");
       if (arguments[i] == "asc")
         sort = ASC;
       else if (arguments[i] == "desc")
@@ -370,7 +369,7 @@ CLI_PARSE_RESULT parse_arguments_relaxed(std::vector<std::string> &arguments) {
         sort = NAME;
       else
         throw std::invalid_argument(
-            "Invalid sort order, use '-s asc' '-s desc' '-s name'");
+          "Invalid sort order, use '-s asc' '-s desc' '-s name'");
       res.has_sort = true;
     } else if (is_output_csv(arguments[i])) {
       output_csv = true;

@@ -10,14 +10,14 @@
 #include "../include/output.h"
 #include "../include/sourcing.h"
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   LoadedConfig file_cfg = load_cognity_toml("cognity.toml");
 
   std::vector<std::string> args = args_to_string(argv, argc);
   CLI_PARSE_RESULT parsed;
   try {
     parsed = parse_arguments_relaxed(args);
-  } catch (const std::invalid_argument &e) {
+  } catch (const std::invalid_argument& e) {
     cli_helpers::print_error(e.what());
     return 1;
   }
@@ -37,11 +37,11 @@ int main(int argc, char **argv) {
 
   if (cli_args.paths.empty()) {
     cli_helpers::print_error(
-        "expected at least one path (via CLI or cognity.toml)");
+      "expected at least one path (via CLI or cognity.toml)");
     return 1;
   }
 
-  TSParser *parser = ts_parser_new();
+  TSParser* parser = ts_parser_new();
   std::string source_code;
 
   std::vector<std::string> files;
@@ -55,30 +55,30 @@ int main(int argc, char **argv) {
 
   std::vector<report::Row> all_rows;
 
-  for (std::string &path : files) {
+  for (std::string& path : files) {
     Language lang = detect_language_from_path(path);
     set_ts_language_for_file(parser, lang, path);
     if (lang == Language::Unknown) continue;
     try {
       source_code = load_file_content(path);
-    } catch (const std::runtime_error &e) {
+    } catch (const std::runtime_error& e) {
       cli_helpers::print_error(e.what());
       return 1;
     }
 
     std::vector<FunctionComplexity> functions_complexity =
-        functions_complexity_file(source_code, parser, lang);
+      functions_complexity_file(source_code, parser, lang);
     report::sort_functions(functions_complexity, cli_args.sort);
 
-    for (const auto &fn : functions_complexity) {
+    for (const auto& fn : functions_complexity) {
       all_rows.push_back(report::Row{path, fn});
     }
   }
 
   bool any_exceeds = report::any_exceeds(
-      all_rows, cli_args.max_complexity_allowed, cli_args.ignore_complexity);
+    all_rows, cli_args.max_complexity_allowed, cli_args.ignore_complexity);
 
-  auto rows_cmp_name = [](const report::Row &a, const report::Row &b) {
+  auto rows_cmp_name = [](const report::Row& a, const report::Row& b) {
     if (a.file != b.file) return a.file < b.file;
     if (a.fn.name != b.fn.name) return a.fn.name < b.fn.name;
     return a.fn.row < b.fn.row;

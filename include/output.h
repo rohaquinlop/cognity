@@ -16,7 +16,7 @@ struct ColorConfig {
   bool ansi_enabled_stderr = false;
 };
 
-const char *code(Style s);
+const char* code(Style s);
 
 struct Painter {
   ColorConfig cfg;
@@ -26,7 +26,7 @@ struct Painter {
   void init(bool json_mode, bool csv_mode);
 
   template <typename T>
-  void print(std::ostream &os, Style style, const T &text,
+  void print(std::ostream& os, Style style, const T& text,
              bool is_err = false) {
     bool enabled = is_err ? err_enabled : out_enabled;
     if (enabled) {
@@ -46,7 +46,7 @@ struct Row {
   FunctionComplexity fn;
 };
 
-void sort_functions(std::vector<FunctionComplexity> &functions, SortType sort);
+void sort_functions(std::vector<FunctionComplexity>& functions, SortType sort);
 
 void print_json(std::vector<Row> rows, SortType sort,
                 int max_complexity_allowed, bool ignore_complexity,
@@ -55,7 +55,7 @@ void print_json(std::vector<Row> rows, SortType sort,
 void print_csv(std::vector<Row> rows, SortType sort, int max_complexity_allowed,
                bool ignore_complexity, DetailType detail);
 
-bool any_exceeds(const std::vector<Row> &rows, int max_complexity_allowed,
+bool any_exceeds(const std::vector<Row>& rows, int max_complexity_allowed,
                  bool ignore_complexity);
 void print_table(std::vector<Row> rows, SortType sort, int max_fn_width,
                  int max_complexity_allowed, bool ignore_complexity, bool quiet,

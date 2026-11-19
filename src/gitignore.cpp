@@ -7,19 +7,19 @@
 
 namespace {
 
-static std::string to_slash_path(const std::filesystem::path &p) {
+static std::string to_slash_path(const std::filesystem::path& p) {
   std::string s = p.generic_string();
   return s;
 }
 
-static std::string trim(const std::string &s) {
+static std::string trim(const std::string& s) {
   size_t i = 0, j = s.size();
   while (i < j && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
   while (j > i && std::isspace(static_cast<unsigned char>(s[j - 1]))) --j;
   return s.substr(i, j - i);
 }
 
-static bool glob_match(const std::string &pattern, const std::string &text) {
+static bool glob_match(const std::string& pattern, const std::string& text) {
   size_t pi = 0, ti = 0;
   size_t star_pi = std::string::npos;
   size_t star_ti = std::string::npos;
@@ -96,9 +96,9 @@ static bool glob_match(const std::string &pattern, const std::string &text) {
   return pi == pattern.size();
 }
 
-static bool match_against(const ignore::Rule &r,
-                          const std::filesystem::path &base,
-                          const std::filesystem::path &abs_path, bool is_dir) {
+static bool match_against(const ignore::Rule& r,
+                          const std::filesystem::path& base,
+                          const std::filesystem::path& abs_path, bool is_dir) {
   if (r.dir_only && !is_dir) return false;
 
   std::error_code ec;
@@ -121,7 +121,7 @@ static bool match_against(const ignore::Rule &r,
 
 namespace ignore {
 
-static bool parse_rule_line(const std::string &raw, Rule &out) {
+static bool parse_rule_line(const std::string& raw, Rule& out) {
   std::string s = trim(raw);
   if (s.empty()) return false;
   if (s[0] == '#') return false;
@@ -148,7 +148,7 @@ static bool parse_rule_line(const std::string &raw, Rule &out) {
   return !r.pattern.empty();
 }
 
-RulesFile load_rules_for_dir(const std::filesystem::path &dir) {
+RulesFile load_rules_for_dir(const std::filesystem::path& dir) {
   RulesFile rf;
   rf.base = dir;
   std::filesystem::path file = dir / ".gitignore";
@@ -164,11 +164,11 @@ RulesFile load_rules_for_dir(const std::filesystem::path &dir) {
   return rf;
 }
 
-bool is_ignored(const std::vector<RulesFile> &stack,
-                const std::filesystem::path &abs_path, bool is_dir) {
+bool is_ignored(const std::vector<RulesFile>& stack,
+                const std::filesystem::path& abs_path, bool is_dir) {
   bool ignored = false;
-  for (const auto &rf : stack) {
-    for (const auto &r : rf.rules) {
+  for (const auto& rf : stack) {
+    for (const auto& r : rf.rules) {
       if (match_against(r, rf.base, abs_path, is_dir)) {
         ignored = !r.negated;
       }

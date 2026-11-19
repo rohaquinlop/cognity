@@ -31,7 +31,7 @@ static inline string to_lower(string s) {
   return s;
 }
 
-static inline bool ieq(const string &a, const string &b) {
+static inline bool ieq(const string& a, const string& b) {
   if (a.size() != b.size()) return false;
   for (size_t i = 0; i < a.size(); ++i)
     if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i]))
@@ -39,7 +39,7 @@ static inline bool ieq(const string &a, const string &b) {
   return true;
 }
 
-static std::optional<string> parse_string_value(const string &s, size_t &pos) {
+static std::optional<string> parse_string_value(const string& s, size_t& pos) {
   if (pos >= s.size() || s[pos] != '"') return std::nullopt;
   ++pos;
   std::ostringstream out;
@@ -75,28 +75,28 @@ static std::optional<string> parse_string_value(const string &s, size_t &pos) {
   return out.str();
 }
 
-static std::optional<long long> parse_int_value(const string &s) {
+static std::optional<long long> parse_int_value(const string& s) {
   if (s.empty()) return std::nullopt;
-  char *end = nullptr;
+  char* end = nullptr;
   long long v = std::strtoll(s.c_str(), &end, 10);
   if (end && *end == '\0') return v;
   return std::nullopt;
 }
 
-static std::optional<bool> parse_bool_value(const string &s) {
+static std::optional<bool> parse_bool_value(const string& s) {
   string t = to_lower(trim(s));
   if (t == "true") return true;
   if (t == "false") return false;
   return std::nullopt;
 }
 
-static std::vector<string> split_csv(const string &s) {
+static std::vector<string> split_csv(const string& s) {
   std::vector<string> out;
   size_t start = 0;
   while (start <= s.size()) {
     size_t comma = s.find(',', start);
     string tok =
-        s.substr(start, comma == string::npos ? string::npos : (comma - start));
+      s.substr(start, comma == string::npos ? string::npos : (comma - start));
     tok = trim(tok);
     if (!tok.empty()) out.push_back(tok);
     if (comma == string::npos) break;
@@ -118,10 +118,10 @@ static Language language_from_token(string tok) {
   return Language::Unknown;
 }
 
-static void parse_languages_list(const string &value,
-                                 std::vector<Language> &out) {
+static void parse_languages_list(const string& value,
+                                 std::vector<Language>& out) {
   auto toks = split_csv(value);
-  for (auto &tok : toks) {
+  for (auto& tok : toks) {
     Language lang = language_from_token(tok);
     if (lang != Language::Unknown &&
         std::find(out.begin(), out.end(), lang) == out.end())
@@ -129,7 +129,7 @@ static void parse_languages_list(const string &value,
   }
 }
 
-static std::vector<string> parse_array_of_strings(const string &raw) {
+static std::vector<string> parse_array_of_strings(const string& raw) {
   std::vector<string> out;
   size_t i = 0;
   // Expect [ ... ]
@@ -159,7 +159,7 @@ static std::vector<string> parse_array_of_strings(const string &raw) {
   return out;
 }
 
-LoadedConfig load_cognity_toml(const std::string &filepath) {
+LoadedConfig load_cognity_toml(const std::string& filepath) {
   LoadedConfig cfg;
   namespace fs = std::filesystem;
   std::error_code ec;
@@ -316,7 +316,7 @@ LoadedConfig load_cognity_toml(const std::string &filepath) {
         vals = split_csv(value);
       }
       cfg.args.languages.clear();
-      for (auto &tok : vals) {
+      for (auto& tok : vals) {
         Language l = language_from_token(tok);
         if (l != Language::Unknown &&
             std::find(cfg.args.languages.begin(), cfg.args.languages.end(),

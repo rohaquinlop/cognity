@@ -10,7 +10,7 @@ using std::string_view;
 
 static inline string t(TSNode n) { return string(ts_node_grammar_type(n)); }
 
-static string compute_ancestor_qual(TSNode n, const string &src) {
+static string compute_ancestor_qual(TSNode n, const string& src) {
   std::vector<string> parts;
   TSNode cur = ts_node_parent(n);
   while (!ts_node_is_null(cur)) {
@@ -20,14 +20,14 @@ static string compute_ancestor_qual(TSNode n, const string &src) {
       TSNode nm = ts_node_child_by_field_name(cur, "name", 4);
       if (!ts_node_is_null(nm))
         parts.push_back(string(string_view(src).substr(
-            ts_node_start_byte(nm),
-            ts_node_end_byte(nm) - ts_node_start_byte(nm))));
+          ts_node_start_byte(nm),
+          ts_node_end_byte(nm) - ts_node_start_byte(nm))));
     } else if (ty == "namespace_definition") {
       TSNode nm = ts_node_child_by_field_name(cur, "name", 4);
       if (!ts_node_is_null(nm))
         parts.push_back(string(string_view(src).substr(
-            ts_node_start_byte(nm),
-            ts_node_end_byte(nm) - ts_node_start_byte(nm))));
+          ts_node_start_byte(nm),
+          ts_node_end_byte(nm) - ts_node_start_byte(nm))));
     }
     cur = ts_node_parent(cur);
   }
@@ -46,22 +46,22 @@ SourceLoc CLikeGSGBuilder::loc(TSNode n) {
   return SourceLoc{p.row, p.column, q.column};
 }
 
-string_view CLikeGSGBuilder::slice(const string &src, TSNode n) {
+string_view CLikeGSGBuilder::slice(const string& src, TSNode n) {
   const uint32_t a = ts_node_start_byte(n);
   const uint32_t b = ts_node_end_byte(n);
   return string_view(src).substr(a, b - a);
 }
 
 std::vector<GSGNode> CLikeGSGBuilder::build_functions(TSNode root,
-                                                      const string &src) {
+                                                      const string& src) {
   std::vector<GSGNode> funcs;
   collect_functions_in_scope(root, src, /*qual*/ "", funcs);
   return funcs;
 }
 
-void CLikeGSGBuilder::collect_functions_in_scope(TSNode n, const string &src,
-                                                 const string &qual,
-                                                 std::vector<GSGNode> &out) {
+void CLikeGSGBuilder::collect_functions_in_scope(TSNode n, const string& src,
+                                                 const string& qual,
+                                                 std::vector<GSGNode>& out) {
   int m = ts_node_named_child_count(n);
   for (int i = 0; i < m; ++i) {
     TSNode ch = ts_node_named_child(n, i);
@@ -133,12 +133,12 @@ void CLikeGSGBuilder::collect_functions_in_scope(TSNode n, const string &src,
 }
 
 string CLikeGSGBuilder::function_name_from_declarator(TSNode decl,
-                                                      const string &src) {
+                                                      const string& src) {
   string_view full = slice(src, decl);
   size_t p = full.find('(');
   if (p != string::npos) {
     string pre(full.substr(0, p));
-    auto trim = [](string &s) {
+    auto trim = [](string& s) {
       size_t a = s.find_first_not_of(" \t\n");
       size_t b = s.find_last_not_of(" \t\n");
       if (a == string::npos)
@@ -164,7 +164,7 @@ string CLikeGSGBuilder::function_name_from_declarator(TSNode decl,
   return string{};
 }
 
-GSGNode CLikeGSGBuilder::build_function(TSNode n, const string &src) {
+GSGNode CLikeGSGBuilder::build_function(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::Function;
   g.loc = loc(n);
@@ -175,8 +175,8 @@ GSGNode CLikeGSGBuilder::build_function(TSNode n, const string &src) {
   return g;
 }
 
-GSGNode CLikeGSGBuilder::build_function(TSNode n, const string &src,
-                                        const string &qual) {
+GSGNode CLikeGSGBuilder::build_function(TSNode n, const string& src,
+                                        const string& qual) {
   GSGNode g = build_function(n, src);
   if (!qual.empty() && !g.name.empty()) {
     string prefix = qual + "::";
@@ -185,8 +185,8 @@ GSGNode CLikeGSGBuilder::build_function(TSNode n, const string &src,
   return g;
 }
 
-void CLikeGSGBuilder::build_block_children(TSNode n, const string &src,
-                                           std::vector<GSGNode> &out,
+void CLikeGSGBuilder::build_block_children(TSNode n, const string& src,
+                                           std::vector<GSGNode>& out,
                                            int nesting) {
   int m = ts_node_named_child_count(n);
   for (int i = 0; i < m; ++i) {
@@ -263,7 +263,7 @@ void CLikeGSGBuilder::build_block_children(TSNode n, const string &src,
   }
 }
 
-GSGNode CLikeGSGBuilder::build_if(TSNode n, const string &src) {
+GSGNode CLikeGSGBuilder::build_if(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::If;
   g.loc = loc(n);
@@ -300,7 +300,7 @@ GSGNode CLikeGSGBuilder::build_if(TSNode n, const string &src) {
   return g;
 }
 
-GSGNode CLikeGSGBuilder::build_while(TSNode n, const string &src) {
+GSGNode CLikeGSGBuilder::build_while(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::While;
   g.loc = loc(n);
@@ -312,7 +312,7 @@ GSGNode CLikeGSGBuilder::build_while(TSNode n, const string &src) {
   return g;
 }
 
-GSGNode CLikeGSGBuilder::build_for(TSNode n, const string &src) {
+GSGNode CLikeGSGBuilder::build_for(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::For;
   g.loc = loc(n);
@@ -321,7 +321,7 @@ GSGNode CLikeGSGBuilder::build_for(TSNode n, const string &src) {
   return g;
 }
 
-GSGNode CLikeGSGBuilder::build_do_while(TSNode n, const string &src) {
+GSGNode CLikeGSGBuilder::build_do_while(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::DoWhile;
   g.loc = loc(n);
@@ -333,18 +333,18 @@ GSGNode CLikeGSGBuilder::build_do_while(TSNode n, const string &src) {
   return g;
 }
 
-static inline bool has_logical_token(const string &s) {
+static inline bool has_logical_token(const string& s) {
   return s.find("&&") != string::npos || s.find("||") != string::npos ||
          s.find('!') != string::npos;
 }
 
-static inline string_view sv_slice(const string &src, TSNode n) {
+static inline string_view sv_slice(const string& src, TSNode n) {
   const uint32_t a = ts_node_start_byte(n);
   const uint32_t b = ts_node_end_byte(n);
   return string_view(src).substr(a, b - a);
 }
 
-static unsigned int c_count_bool_alternations(TSNode n, const string &src) {
+static unsigned int c_count_bool_alternations(TSNode n, const string& src) {
   string ty = t(n);
   unsigned int c = 0;
   if (ty == "binary_expression") {
@@ -352,16 +352,16 @@ static unsigned int c_count_bool_alternations(TSNode n, const string &src) {
     TSNode right = ts_node_child_by_field_name(n, "right", 5);
     auto s = sv_slice(src, n);
     int curr = (s.find("&&") != string::npos)
-                   ? 0
-                   : ((s.find("||") != string::npos) ? 1 : -1);
+                 ? 0
+                 : ((s.find("||") != string::npos) ? 1 : -1);
     auto sl = sv_slice(src, left);
     auto sr = sv_slice(src, right);
     int lb = (sl.find("&&") != string::npos)
-                 ? 0
-                 : ((sl.find("||") != string::npos) ? 1 : -1);
+               ? 0
+               : ((sl.find("||") != string::npos) ? 1 : -1);
     int rb = (sr.find("&&") != string::npos)
-                 ? 0
-                 : ((sr.find("||") != string::npos) ? 1 : -1);
+               ? 0
+               : ((sr.find("||") != string::npos) ? 1 : -1);
     if (lb != -1 && curr != lb) c++;
     if (rb != -1 && curr != rb) c++;
     c += c_count_bool_alternations(left, src);
@@ -371,7 +371,7 @@ static unsigned int c_count_bool_alternations(TSNode n, const string &src) {
 }
 
 unsigned int CLikeGSGBuilder::c_count_bool_ops_expr(TSNode n, int nesting,
-                                                    const string &src) {
+                                                    const string& src) {
   if (ts_node_is_null(n)) return 0;
   string ty = t(n);
   if (ty == "binary_expression") {
@@ -401,8 +401,8 @@ unsigned int CLikeGSGBuilder::c_count_bool_ops_expr(TSNode n, int nesting,
   return total;
 }
 
-void CLikeGSGBuilder::collect_lambdas_in_node(TSNode n, const string &src,
-                                              std::vector<GSGNode> &out) {
+void CLikeGSGBuilder::collect_lambdas_in_node(TSNode n, const string& src,
+                                              std::vector<GSGNode>& out) {
   if (ts_node_is_null(n)) return;
   string ty = t(n);
   if (ty == "lambda_expression") {
@@ -414,7 +414,7 @@ void CLikeGSGBuilder::collect_lambdas_in_node(TSNode n, const string &src,
     collect_lambdas_in_node(ts_node_named_child(n, i), src, out);
 }
 
-GSGNode CLikeGSGBuilder::build_lambda(TSNode n, const string &src) {
+GSGNode CLikeGSGBuilder::build_lambda(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::Function;
   g.loc = loc(n);

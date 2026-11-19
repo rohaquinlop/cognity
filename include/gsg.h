@@ -63,7 +63,7 @@ struct IBuilder {
   virtual ~IBuilder() = default;
   // Build function-level GSG nodes found in the file/module root
   virtual std::vector<GSGNode> build_functions(TSNode root,
-                                               const std::string &source) = 0;
+                                               const std::string& source) = 0;
 };
 
 std::unique_ptr<IBuilder> make_builder(Language lang);

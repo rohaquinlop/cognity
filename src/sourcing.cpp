@@ -7,16 +7,16 @@
 #include "../include/sourcing.h"
 
 extern "C" {
-const TSLanguage *tree_sitter_python();
-const TSLanguage *tree_sitter_javascript();
-const TSLanguage *tree_sitter_typescript();
-const TSLanguage *tree_sitter_tsx();
-const TSLanguage *tree_sitter_c();
-const TSLanguage *tree_sitter_cpp();
+const TSLanguage* tree_sitter_python();
+const TSLanguage* tree_sitter_javascript();
+const TSLanguage* tree_sitter_typescript();
+const TSLanguage* tree_sitter_tsx();
+const TSLanguage* tree_sitter_c();
+const TSLanguage* tree_sitter_cpp();
 }
 
-Language detect_language_from_path(const std::string &path) {
-  auto ends_with = [&](const char *suf) {
+Language detect_language_from_path(const std::string& path) {
+  auto ends_with = [&](const char* suf) {
     size_t n = strlen(suf);
     return path.size() >= n && path.compare(path.size() - n, n, suf) == 0;
   };
@@ -32,7 +32,7 @@ Language detect_language_from_path(const std::string &path) {
 }
 
 static bool language_is_selected(Language lang,
-                                 const std::vector<Language> &filter) {
+                                 const std::vector<Language>& filter) {
   if (filter.empty()) return true;
   for (auto l : filter)
     if (l == lang) return true;
@@ -40,10 +40,10 @@ static bool language_is_selected(Language lang,
 }
 
 static void collect_dir_with_gitignore(
-    const std::filesystem::path &dir, const std::vector<Language> &filter,
-    const std::vector<std::filesystem::path> &exclude_dirs,
-    const std::vector<std::filesystem::path> &exclude_files,
-    std::vector<std::string> &out, std::vector<ignore::RulesFile> &stack) {
+  const std::filesystem::path& dir, const std::vector<Language>& filter,
+  const std::vector<std::filesystem::path>& exclude_dirs,
+  const std::vector<std::filesystem::path>& exclude_files,
+  std::vector<std::string>& out, std::vector<ignore::RulesFile>& stack) {
   namespace fs = std::filesystem;
   auto rf = ignore::load_rules_for_dir(dir);
   bool pushed = !rf.rules.empty();
@@ -52,7 +52,7 @@ static void collect_dir_with_gitignore(
   std::error_code ec;
   for (fs::directory_iterator it(dir, ec), end; it != end; it.increment(ec)) {
     if (ec) break;
-    const fs::directory_entry &ent = *it;
+    const fs::directory_entry& ent = *it;
     fs::path p = ent.path();
     bool is_dir = ent.is_directory(ec);
     if (ec) is_dir = false;
@@ -64,7 +64,7 @@ static void collect_dir_with_gitignore(
     // Exclude directories early (skip recursion)
     if (is_dir) {
       bool skip_dir = false;
-      for (const auto &ed : exclude_dirs) {
+      for (const auto& ed : exclude_dirs) {
         std::error_code ec2;
         auto rel = fs::relative(p, ed, ec2);
         if (!ec2 && !rel.empty() && rel.is_relative() &&
@@ -98,7 +98,7 @@ static void collect_dir_with_gitignore(
       std::string fpath = p.string();
       // Exclude files
       bool skip_file = false;
-      for (const auto &ef : exclude_files) {
+      for (const auto& ef : exclude_files) {
         std::error_code ec3;
         auto pnorm = fs::weakly_canonical(p, ec3);
         auto fnorm = fs::weakly_canonical(ef, ec3);
@@ -118,15 +118,15 @@ static void collect_dir_with_gitignore(
   if (pushed) stack.pop_back();
 }
 
-void collect_source_files(const std::vector<std::string> &inputs,
-                          const std::vector<Language> &filter,
-                          const std::vector<std::string> &excludes,
-                          std::vector<std::string> &out) {
+void collect_source_files(const std::vector<std::string>& inputs,
+                          const std::vector<Language>& filter,
+                          const std::vector<std::string>& excludes,
+                          std::vector<std::string>& out) {
   namespace fs = std::filesystem;
   // Prepare exclude lists
   std::vector<fs::path> exclude_dirs;
   std::vector<fs::path> exclude_files;
-  for (const auto &e : excludes) {
+  for (const auto& e : excludes) {
     std::error_code ec;
     fs::path ep = fs::absolute(fs::path(e), ec);
     if (ec) ep = fs::path(e);
@@ -135,14 +135,14 @@ void collect_source_files(const std::vector<std::string> &inputs,
     else
       exclude_files.push_back(ep);
   }
-  for (const auto &p : inputs) {
+  for (const auto& p : inputs) {
     fs::path path(p);
     std::error_code ec;
     if (fs::is_directory(path, ec)) {
       std::vector<ignore::RulesFile> stack;
       // Skip top-level directory if excluded
       bool skip_dir = false;
-      for (const auto &ed : exclude_dirs) {
+      for (const auto& ed : exclude_dirs) {
         std::error_code ec2;
         auto rel = fs::weakly_canonical(path, ec2);
         auto dnorm = fs::weakly_canonical(ed, ec2);
@@ -157,7 +157,7 @@ void collect_source_files(const std::vector<std::string> &inputs,
     } else if (fs::is_regular_file(path, ec)) {
       // Skip if explicitly excluded
       bool skip = false;
-      for (const auto &ef : exclude_files) {
+      for (const auto& ef : exclude_files) {
         std::error_code ec3;
         auto pnorm = fs::weakly_canonical(path, ec3);
         auto fnorm = fs::weakly_canonical(ef, ec3);
@@ -176,8 +176,8 @@ void collect_source_files(const std::vector<std::string> &inputs,
   }
 }
 
-void set_ts_language_for_file(TSParser *parser, Language lang,
-                              const std::string &path) {
+void set_ts_language_for_file(TSParser* parser, Language lang,
+                              const std::string& path) {
   switch (lang) {
     case Language::Python:
       ts_parser_set_language(parser, tree_sitter_python());

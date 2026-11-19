@@ -16,14 +16,14 @@ SourceLoc PythonGSGBuilder::loc_from_node(TSNode node) {
   return SourceLoc{p.row, p.column, q.column};
 }
 
-string_view PythonGSGBuilder::slice_source(const string &source, TSNode node) {
+string_view PythonGSGBuilder::slice_source(const string& source, TSNode node) {
   const uint32_t a = ts_node_start_byte(node);
   const uint32_t b = ts_node_end_byte(node);
   return string_view(source).substr(a, b - a);
 }
 
 string_view PythonGSGBuilder::get_identifier(TSNode node,
-                                             const string &source) {
+                                             const string& source) {
   TSNode name = ts_node_child_by_field_name(node, "name", 4);
   return slice_source(source, name);
 }
@@ -37,18 +37,18 @@ static BoolOp from_text_get_bool_op(string_view s) {
   return BoolOp::Unknown;
 }
 
-static string_view slice_src(const string &source, TSNode node) {
+static string_view slice_src(const string& source, TSNode node) {
   const uint32_t a = ts_node_start_byte(node);
   const uint32_t b = ts_node_end_byte(node);
   return string_view(source).substr(a, b - a);
 }
 
-static BoolOp get_boolean_op_for_node(TSNode node, const string &source) {
+static BoolOp get_boolean_op_for_node(TSNode node, const string& source) {
   return from_text_get_bool_op(slice_src(source, node));
 }
 
 unsigned int PythonGSGBuilder::count_bool_operators(TSNode node,
-                                                    const string &source) {
+                                                    const string& source) {
   if (ts_node_is_null(node)) return 0;
   string t = node_type(node);
   unsigned int complexity = 0;
@@ -74,7 +74,7 @@ unsigned int PythonGSGBuilder::count_bool_operators(TSNode node,
 }
 
 unsigned int PythonGSGBuilder::count_bool_ops_expr(TSNode node, int nesting,
-                                                   const string &source) {
+                                                   const string& source) {
   if (ts_node_is_null(node)) return 0;
   string t = node_type(node);
   if (t == "boolean_operator") {
@@ -96,7 +96,7 @@ unsigned int PythonGSGBuilder::count_bool_ops_expr(TSNode node, int nesting,
     int m = ts_node_named_child_count(node);
     for (int i = 0; i < m; ++i)
       total +=
-          count_bool_ops_expr(ts_node_named_child(node, i), nesting, source);
+        count_bool_ops_expr(ts_node_named_child(node, i), nesting, source);
     return total;
   }
   unsigned int total = 0;
@@ -107,7 +107,7 @@ unsigned int PythonGSGBuilder::count_bool_ops_expr(TSNode node, int nesting,
 }
 
 std::vector<GSGNode> PythonGSGBuilder::build_functions(TSNode root,
-                                                       const string &source) {
+                                                       const string& source) {
   std::vector<GSGNode> funcs;
   int n = ts_node_named_child_count(root);
   for (int i = 0; i < n; ++i) {
@@ -145,7 +145,7 @@ std::vector<GSGNode> PythonGSGBuilder::build_functions(TSNode root,
   return funcs;
 }
 
-GSGNode PythonGSGBuilder::build_function(TSNode node, const string &source) {
+GSGNode PythonGSGBuilder::build_function(TSNode node, const string& source) {
   GSGNode f;
   f.kind = GSGNodeKind::Function;
   f.name = std::string(get_identifier(node, source));
@@ -174,8 +174,8 @@ GSGNode PythonGSGBuilder::build_function(TSNode node, const string &source) {
   return f;
 }
 
-void PythonGSGBuilder::build_block_children(TSNode block, const string &source,
-                                            std::vector<GSGNode> &out,
+void PythonGSGBuilder::build_block_children(TSNode block, const string& source,
+                                            std::vector<GSGNode>& out,
                                             int nesting) {
   int n = ts_node_named_child_count(block);
   for (int i = 0; i < n; ++i) {
@@ -443,7 +443,7 @@ void PythonGSGBuilder::build_block_children(TSNode block, const string &source,
   }
 }
 
-GSGNode PythonGSGBuilder::build_for(TSNode node, const string &source,
+GSGNode PythonGSGBuilder::build_for(TSNode node, const string& source,
                                     int nesting) {
   (void)source;
   GSGNode g;
@@ -455,7 +455,7 @@ GSGNode PythonGSGBuilder::build_for(TSNode node, const string &source,
   return g;
 }
 
-GSGNode PythonGSGBuilder::build_while(TSNode node, const string &source,
+GSGNode PythonGSGBuilder::build_while(TSNode node, const string& source,
                                       int nesting) {
   GSGNode g;
   g.kind = GSGNodeKind::While;
@@ -471,7 +471,7 @@ GSGNode PythonGSGBuilder::build_while(TSNode node, const string &source,
   return g;
 }
 
-GSGNode PythonGSGBuilder::build_if(TSNode node, const string &source,
+GSGNode PythonGSGBuilder::build_if(TSNode node, const string& source,
                                    int nesting) {
   GSGNode g;
   g.kind = GSGNodeKind::If;

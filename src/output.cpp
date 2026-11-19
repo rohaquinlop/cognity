@@ -24,11 +24,11 @@
 namespace term {
 
 static inline bool env_no_color() {
-  const char *v = std::getenv("NO_COLOR");
+  const char* v = std::getenv("NO_COLOR");
   return v != nullptr;  // https://no-color.org/
 }
 
-static inline void enable_win_vt_if_possible(ColorConfig &cfg, bool for_stdout,
+static inline void enable_win_vt_if_possible(ColorConfig& cfg, bool for_stdout,
                                              bool for_stderr) {
 #ifdef _WIN32
   auto try_enable = [](DWORD handle_id) -> bool {
@@ -49,10 +49,10 @@ static inline void enable_win_vt_if_possible(ColorConfig &cfg, bool for_stdout,
 #endif
 }
 
-static inline bool stream_supports_color(std::ostream &os, bool is_stderr,
-                                         const ColorConfig &cfg) {
+static inline bool stream_supports_color(std::ostream& os, bool is_stderr,
+                                         const ColorConfig& cfg) {
   if (env_no_color()) return false;
-  FILE *f = is_stderr ? stderr : stdout;
+  FILE* f = is_stderr ? stderr : stdout;
   if (!ISATTY(FILENO(f))) return false;
 #ifdef _WIN32
   return is_stderr ? cfg.ansi_enabled_stderr : cfg.ansi_enabled_stdout;
@@ -62,7 +62,7 @@ static inline bool stream_supports_color(std::ostream &os, bool is_stderr,
 #endif
 }
 
-const char *code(Style s) {
+const char* code(Style s) {
   switch (s) {
     case Style::reset:
       return "\x1b[0m";
@@ -102,30 +102,30 @@ void Painter::init(bool json_mode, bool csv_mode) {
 
 namespace report {
 
-bool any_exceeds(const std::vector<Row> &rows, int max_complexity_allowed,
+bool any_exceeds(const std::vector<Row>& rows, int max_complexity_allowed,
                  bool ignore_complexity) {
   if (ignore_complexity) return false;
-  for (const auto &r : rows) {
+  for (const auto& r : rows) {
     if (r.fn.complexity > (unsigned)max_complexity_allowed) return true;
   }
   return false;
 }
 
-static inline void sort_rows(std::vector<Row> &rows, SortType sort) {
-  auto rows_cmp_name = [](const Row &a, const Row &b) {
+static inline void sort_rows(std::vector<Row>& rows, SortType sort) {
+  auto rows_cmp_name = [](const Row& a, const Row& b) {
     if (a.file != b.file) return a.file < b.file;
     if (a.fn.name != b.fn.name) return a.fn.name < b.fn.name;
     if (a.fn.row != b.fn.row) return a.fn.row < b.fn.row;
     return a.fn.complexity < b.fn.complexity;
   };
-  auto rows_cmp_asc = [](const Row &a, const Row &b) {
+  auto rows_cmp_asc = [](const Row& a, const Row& b) {
     if (a.fn.complexity != b.fn.complexity)
       return a.fn.complexity < b.fn.complexity;
     if (a.file != b.file) return a.file < b.file;
     if (a.fn.name != b.fn.name) return a.fn.name < b.fn.name;
     return a.fn.row < b.fn.row;
   };
-  auto rows_cmp_desc = [](const Row &a, const Row &b) {
+  auto rows_cmp_desc = [](const Row& a, const Row& b) {
     if (a.fn.complexity != b.fn.complexity)
       return a.fn.complexity > b.fn.complexity;
     if (a.file != b.file) return a.file < b.file;
@@ -146,18 +146,18 @@ static inline void sort_rows(std::vector<Row> &rows, SortType sort) {
   }
 }
 
-void sort_functions(std::vector<FunctionComplexity> &functions, SortType sort) {
-  auto cmp_name = [](const FunctionComplexity &a, const FunctionComplexity &b) {
+void sort_functions(std::vector<FunctionComplexity>& functions, SortType sort) {
+  auto cmp_name = [](const FunctionComplexity& a, const FunctionComplexity& b) {
     if (a.name != b.name) return a.name < b.name;
     if (a.row != b.row) return a.row < b.row;
     return a.complexity < b.complexity;
   };
-  auto cmp_asc = [](const FunctionComplexity &a, const FunctionComplexity &b) {
+  auto cmp_asc = [](const FunctionComplexity& a, const FunctionComplexity& b) {
     if (a.complexity != b.complexity) return a.complexity < b.complexity;
     if (a.name != b.name) return a.name < b.name;
     return a.row < b.row;
   };
-  auto cmp_desc = [](const FunctionComplexity &a, const FunctionComplexity &b) {
+  auto cmp_desc = [](const FunctionComplexity& a, const FunctionComplexity& b) {
     if (a.complexity != b.complexity) return a.complexity > b.complexity;
     if (a.name != b.name) return a.name < b.name;
     return a.row < b.row;
@@ -180,7 +180,7 @@ void print_json(std::vector<Row> rows, SortType sort,
                 DetailType detail) {
   if (detail == LOW && !ignore_complexity) {
     rows.erase(std::remove_if(rows.begin(), rows.end(),
-                              [&](const Row &r) {
+                              [&](const Row& r) {
                                 return r.fn.complexity <=
                                        (unsigned)max_complexity_allowed;
                               }),
@@ -189,7 +189,7 @@ void print_json(std::vector<Row> rows, SortType sort,
   sort_rows(rows, sort);
   std::cout << "[";
   for (size_t i = 0; i < rows.size(); ++i) {
-    const auto &r = rows[i];
+    const auto& r = rows[i];
     std::cout << (i ? ",\n" : "\n");
     std::cout << "  {\"file\": \"" << r.file << "\", "
               << "\"function\": \"" << r.fn.name << "@" << r.fn.row + 1
@@ -205,7 +205,7 @@ void print_csv(std::vector<Row> rows, SortType sort, int max_complexity_allowed,
                bool ignore_complexity, DetailType detail) {
   if (detail == LOW && !ignore_complexity) {
     rows.erase(std::remove_if(rows.begin(), rows.end(),
-                              [&](const Row &r) {
+                              [&](const Row& r) {
                                 return r.fn.complexity <=
                                        (unsigned)max_complexity_allowed;
                               }),
@@ -213,7 +213,7 @@ void print_csv(std::vector<Row> rows, SortType sort, int max_complexity_allowed,
   }
   sort_rows(rows, sort);
   std::cout << "file,function,complexity,line" << '\n';
-  for (const auto &r : rows) {
+  for (const auto& r : rows) {
     std::cout << r.file << "," << r.fn.name << "@" << r.fn.row + 1 << ","
               << r.fn.complexity << "," << r.fn.row + 1 << '\n';
   }
@@ -232,7 +232,7 @@ void print_table(std::vector<Row> rows, SortType sort, int max_fn_width,
 
   if ((detail == LOW) && !ignore_complexity) {
     rows.erase(std::remove_if(rows.begin(), rows.end(),
-                              [&](const Row &r) {
+                              [&](const Row& r) {
                                 return r.fn.complexity <=
                                        (unsigned)max_complexity_allowed;
                               }),
@@ -255,7 +255,7 @@ void print_table(std::vector<Row> rows, SortType sort, int max_fn_width,
   int file_w = static_cast<int>(file_header.size());
   int fn_w = static_cast<int>(func_header.size());
   int cc_w = static_cast<int>(cc_header.size());
-  for (const auto &r : rows) {
+  for (const auto& r : rows) {
     file_w = std::max(file_w, static_cast<int>(r.file.size()));
     std::string suffix = "@" + std::to_string(r.fn.row + 1);
     fn_w = std::max(fn_w, static_cast<int>(r.fn.name.size() + suffix.size()));
@@ -270,7 +270,7 @@ void print_table(std::vector<Row> rows, SortType sort, int max_fn_width,
   if (painter.out_enabled) std::cout << term::code(term::Style::reset);
   std::cout << '\n';
 
-  for (const auto &r : rows) {
+  for (const auto& r : rows) {
     std::string suffix = " @ " + std::to_string(r.fn.row + 1);
     std::string base = r.fn.name;
     std::string fn_name = base + suffix;
@@ -278,13 +278,13 @@ void print_table(std::vector<Row> rows, SortType sort, int max_fn_width,
       int avail = fn_w - static_cast<int>(suffix.size());
       if (avail > 3) {
         fn_name =
-            base.substr(0, static_cast<size_t>(avail - 3)) + "..." + suffix;
+          base.substr(0, static_cast<size_t>(avail - 3)) + "..." + suffix;
       } else if (avail > 0) {
         fn_name = base.substr(0, static_cast<size_t>(avail)) + suffix;
       } else {
         fn_name = suffix.size() > static_cast<size_t>(fn_w)
-                      ? suffix.substr(0, static_cast<size_t>(fn_w))
-                      : suffix;
+                    ? suffix.substr(0, static_cast<size_t>(fn_w))
+                    : suffix;
       }
     }
 
@@ -300,7 +300,7 @@ void print_table(std::vector<Row> rows, SortType sort, int max_fn_width,
     }
     if ((!ignore_complexity) && exceeds) {
       std::string note =
-          "  (exceeds " + std::to_string(max_complexity_allowed) + ")";
+        "  (exceeds " + std::to_string(max_complexity_allowed) + ")";
       if (painter.out_enabled) {
         std::cout << term::code(term::Style::red) << note
                   << term::code(term::Style::reset);
