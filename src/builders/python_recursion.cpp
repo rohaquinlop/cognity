@@ -351,7 +351,23 @@ class Resolver {
   }
 
   void walk(TSNode n, int scope, int owner, uint32_t block) {
-    if (ts_node_is_null(n)) return;
+    std::vector<TSNode> stack{n};
+    while (!stack.empty()) {
+      TSNode cur = stack.back();
+      stack.pop_back();
+      if (ts_node_is_null(cur) || walk_special(cur, scope, owner, block))
+        continue;
+      if (type_of(cur) == "call" && owner != kNone)
+        calls_.push_back({.owner = owner,
+                          .scope = scope,
+                          .pos = ts_node_start_byte(cur),
+                          .node = cur});
+      for (uint32_t i = ts_node_named_child_count(cur); i > 0; --i)
+        stack.push_back(ts_node_named_child(cur, i - 1));
+    }
+  }
+
+  bool walk_special(TSNode n, int scope, int owner, uint32_t block) {
     string_view t = type_of(n);
     if (t == "block" || t == "module") {
       walk_children(n, scope, owner, ts_node_start_byte(n));
@@ -431,16 +447,10 @@ class Resolver {
         else
           walk(ch, scope, owner, block);
       }
-    } else if (t == "call") {
-      if (owner != kNone)
-        calls_.push_back({.owner = owner,
-                          .scope = scope,
-                          .pos = ts_node_start_byte(n),
-                          .node = n});
-      walk_children(n, scope, owner, block);
     } else {
-      walk_children(n, scope, owner, block);
+      return false;
     }
+    return true;
   }
 
   int lookup(int scope, const string& name, uint32_t pos) const {
