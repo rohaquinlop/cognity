@@ -85,6 +85,13 @@ Kind param_kind(TSNode p, const string& src) {
 
 Kind argument_kind(TSNode a, const string& src) {
   string_view t = type_of(a);
+  if (t == "unary_expression") {
+    const string_view op = slice(src, field(a, "operator"));
+    TSNode arg = field(a, "argument");
+    return (op == "-" || op == "+") && type_of(arg) == "number_literal"
+             ? argument_kind(arg, src)
+             : Kind::Unknown;
+  }
   if (t == "char_literal") return Kind::Char;
   if (t == "true" || t == "false") return Kind::Bool;
   if (t != "number_literal") return Kind::Unknown;
@@ -97,7 +104,7 @@ Kind argument_kind(TSNode a, const string& src) {
                                                         : Kind::Integer;
 }
 
-void arity(TSNode def, const string& src, Def& d) {
+void signature(TSNode def, const string& src, Def& d) {
   uint32_t& min_args = d.min_args;
   uint32_t& max_args = d.max_args;
   TSNode params =
@@ -165,6 +172,10 @@ void collect_locals(TSNode n, TSNode region, const string& src,
     stack.pop_back();
     string_view t = type_of(cur);
     if (is_region(t)) reg = cur;
+    if (t == "function_declarator" ||
+        (t == "abstract_function_declarator" &&
+         type_of(ts_node_parent(cur)) != "lambda_expression"))
+      continue;
     if (t == "parameter_declaration" || t == "optional_parameter_declaration" ||
         t == "declaration") {
       uint32_t m = ts_node_child_count(cur);
@@ -255,10 +266,7 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
     by_name[funcs[i].name].push_back(i);
   }
 
-  auto text = [&](TSNode n) {
-    const uint32_t a = ts_node_start_byte(n);
-    return src.substr(a, ts_node_end_byte(n) - a);
-  };
+  auto text = [&](TSNode n) { return string(slice(src, n)); };
   auto resolve = [&](
                    const string& scope, const string& name,
                    const std::vector<Kind>& kinds) -> std::vector<std::size_t> {
@@ -296,7 +304,7 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
         if (it != by_start.end()) {
           owner = it->second;
           if (!calls) {
-            arity(n, src, defs[owner]);
+            signature(n, src, defs[owner]);
             collect_locals(
               field(function_declarator(field(n, "declarator")), "parameters"),
               n, src, locals[owner]);
