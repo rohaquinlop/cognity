@@ -98,3 +98,5 @@ file → sourcing.cpp (language by extension, .gitignore, excludes)
   differ from the merge-base. A failure blocks the stop once and shows the
   output. Environment problems only warn. A tree that already passed is not
   checked again.
+- Permissions: `.claude/settings.json` pre-approves `scripts/check.sh`,
+  `cmake`, `ctest` and the pinned `uvx clang-format` / `uvx clang-tidy` calls.
