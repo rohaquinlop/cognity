@@ -2,6 +2,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "../../include/builders/javascript_gsg_builder.h"
@@ -145,11 +146,28 @@ class Resolver {
   }
 
   void walk(TSNode n, int scope, int owner, int cls) {
-    if (ts_node_is_null(n)) return;
+    std::vector<std::pair<TSNode, int>> stack{{n, cls}};
+    while (!stack.empty()) {
+      auto [cur, cur_cls] = stack.back();
+      stack.pop_back();
+      if (ts_node_is_null(cur) || walk_special(cur, scope, owner, cur_cls))
+        continue;
+      if (type_of(cur) == "object") cur_cls = kNone;
+      if (type_of(cur) == "call_expression" && owner != kNone)
+        calls_.push_back({.owner = owner,
+                          .scope = scope,
+                          .pos = ts_node_start_byte(cur),
+                          .node = cur});
+      for (uint32_t i = ts_node_named_child_count(cur); i > 0; --i)
+        stack.emplace_back(ts_node_named_child(cur, i - 1), cur_cls);
+    }
+  }
+
+  bool walk_special(TSNode n, int scope, int owner, int cls) {
     string_view t = type_of(n);
     if (is_function(t)) {
       walk_function(n, scope, owner, cls);
-      return;
+      return true;
     }
     if (t == "class_declaration" || t == "class") {
       TSNode name = field(n, "name");
@@ -158,13 +176,12 @@ class Resolver {
       const int id = static_cast<int>(classes_.size());
       classes_.emplace_back();
       walk(field(n, "body"), scope, owner, id);
-      return;
+      return true;
     }
-    if (t == "object") cls = kNone;
     if (t == "variable_declarator") {
       bind_pattern(field(n, "name"), scope, owner, cls);
       walk(field(n, "value"), scope, owner, cls);
-      return;
+      return true;
     }
     if (t == "import_specifier" || t == "namespace_import" ||
         t == "import_clause") {
@@ -172,16 +189,9 @@ class Resolver {
       if (ts_node_is_null(field(n, "alias")))
         bind_pattern(t == "import_specifier" ? field(n, "name") : n, scope,
                      owner, cls);
-      return;
+      return true;
     }
-    if (t == "call_expression" && owner != kNone)
-      calls_.push_back({.owner = owner,
-                        .scope = scope,
-                        .pos = ts_node_start_byte(n),
-                        .node = n});
-    uint32_t m = ts_node_named_child_count(n);
-    for (uint32_t i = 0; i < m; ++i)
-      walk(ts_node_named_child(n, i), scope, owner, cls);
+    return false;
   }
 
   [[nodiscard]] std::vector<int> callees(const Call& c) const {

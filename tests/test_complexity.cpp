@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 
+#include "../include/builders/javascript_gsg_builder.h"
 #include "../include/builders/python_gsg_builder.h"
 #include "../include/cognitive_complexity.h"
 #include "../include/recursion.h"
@@ -1306,6 +1307,24 @@ int main() {
           .recursive_defs(ts_tree_root_node(tree), deep)
           .size() != 1) {
       std::cerr << "Recursion: call under a deep python expression missed\n";
+      ok = false;
+    }
+    ts_tree_delete(tree);
+    ts_parser_delete(parser);
+  }
+
+  {
+    std::string deep = "function f(a) {\n  return f(a)";
+    for (int i = 0; i < 20000; ++i) deep += "+a";
+    deep += ";\n}\n";
+    TSParser* parser = ts_parser_new();
+    ts_parser_set_language(parser, tree_sitter_javascript());
+    TSTree* tree = ts_parser_parse_string(parser, nullptr, deep.c_str(),
+                                          static_cast<uint32_t>(deep.size()));
+    if (JavaScriptGSGBuilder()
+          .recursive_defs(ts_tree_root_node(tree), deep)
+          .size() != 1) {
+      std::cerr << "Recursion: call under a deep js expression missed\n";
       ok = false;
     }
     ts_tree_delete(tree);
