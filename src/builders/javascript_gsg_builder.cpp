@@ -95,34 +95,55 @@ static bool js_has_logical_op(TSNode n, const string& src) {
          s.find("!") != string::npos;
 }
 
-unsigned int JavaScriptGSGBuilder::js_count_bool_ops_expr(TSNode n, int nesting,
-                                                          const string& src) {
-  if (ts_node_is_null(n)) return 0;
+void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
+                                        GSGNode& into) {
+  if (ts_node_is_null(n)) return;
   string ty = t(n);
   if (ty == "binary_expression") {
-    unsigned int base = js_has_logical_op(n, src) ? 1 : 0;
-    unsigned int alts = js_count_bool_alternations(n, src);
-    TSNode left = ts_node_child_by_field_name(n, "left", 4);
-    TSNode right = ts_node_child_by_field_name(n, "right", 5);
-    return base + alts + js_count_bool_ops_expr(left, nesting, src) +
-           js_count_bool_ops_expr(right, nesting, src);
+    into.addl_cost +=
+      (js_has_logical_op(n, src) ? 1 : 0) + js_count_bool_alternations(n, src);
+    collect_expr(ts_node_child_by_field_name(n, "left", 4), src, into);
+    collect_expr(ts_node_child_by_field_name(n, "right", 5), src, into);
+    return;
   }
   if (ty == "unary_expression") {
     auto s = js_slice(src, n);
-    if (!s.empty() && s[0] == '!') return 1;
+    if (!s.empty() && s[0] == '!') {
+      into.addl_cost += 1;
+      return;
+    }
   }
-  if (ty == "conditional_expression") {
-    unsigned int c = 1 + static_cast<unsigned int>(nesting);
-    int m = ts_node_named_child_count(n);
-    for (int i = 0; i < m; ++i)
-      c += js_count_bool_ops_expr(ts_node_named_child(n, i), nesting, src);
-    return c;
+  GSGNode* target = &into;
+  GSGNode tern;
+  if (ty == "ternary_expression") {
+    tern.kind = GSGNodeKind::Ternary;
+    tern.loc = loc(n);
+    target = &tern;
   }
-  unsigned int total = 0;
   int m = ts_node_named_child_count(n);
   for (int i = 0; i < m; ++i)
-    total += js_count_bool_ops_expr(ts_node_named_child(n, i), nesting, src);
-  return total;
+    collect_expr(ts_node_named_child(n, i), src, *target);
+  if (target == &tern) into.children.emplace_back(std::move(tern));
+}
+
+void JavaScriptGSGBuilder::push_expr(std::vector<GSGNode>& out, TSNode loc_node,
+                                     TSNode expr, const string& src) {
+  GSGNode e;
+  e.kind = GSGNodeKind::Expr;
+  e.loc = loc(loc_node);
+  collect_expr(expr, src, e);
+  if (e.addl_cost || !e.children.empty()) out.emplace_back(std::move(e));
+}
+
+void JavaScriptGSGBuilder::push_header(GSGNode& stmt, TSNode expr,
+                                       const string& src) {
+  if (ts_node_is_null(expr)) return;
+  GSGNode h;
+  h.kind = GSGNodeKind::Header;
+  h.loc = loc(expr);
+  collect_expr(expr, src, h);
+  if (h.addl_cost || !h.children.empty())
+    stmt.children.emplace_back(std::move(h));
 }
 
 std::vector<GSGNode> JavaScriptGSGBuilder::build_functions(TSNode root,
@@ -153,21 +174,68 @@ GSGNode JavaScriptGSGBuilder::build_function(TSNode n, const string& src) {
   g.kind = GSGNodeKind::Function;
   g.name = string(name_of(n, src));
   g.loc = loc(n);
-
-  TSNode body = ts_node_child_by_field_name(n, "body", 4);
-  if (!ts_node_is_null(body)) build_block_children(body, src, g.children, 0);
+  build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
+                       g.children);
   return g;
 }
 
+void JavaScriptGSGBuilder::build_switch(TSNode n, const string& src,
+                                        std::vector<GSGNode>& out) {
+  GSGNode sw;
+  sw.kind = GSGNodeKind::Switch;
+  sw.loc = loc(n);
+  TSNode body = ts_node_child_by_field_name(n, "body", 4);
+  uint32_t kmax = ts_node_is_null(body) ? 0 : ts_node_named_child_count(body);
+  for (uint32_t k = 0; k < kmax; ++k) {
+    TSNode cc = ts_node_named_child(body, k);
+    string cty = t(cc);
+    if (cty != "switch_case" && cty != "switch_default") continue;
+    GSGNode cs;
+    cs.kind = GSGNodeKind::Case;
+    cs.loc = loc(cc);
+    build_block_children(cc, src, cs.children);
+    sw.children.emplace_back(std::move(cs));
+  }
+  out.emplace_back(std::move(sw));
+}
+
+void JavaScriptGSGBuilder::build_try(TSNode n, const string& src,
+                                     std::vector<GSGNode>& out) {
+  GSGNode tr;
+  tr.kind = GSGNodeKind::Try;
+  tr.loc = loc(n);
+  build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
+                       tr.children);
+  out.emplace_back(std::move(tr));
+  TSNode handler = ts_node_child_by_field_name(n, "handler", 7);
+  if (!ts_node_is_null(handler)) {
+    GSGNode c;
+    c.kind = GSGNodeKind::Catch;
+    c.loc = loc(handler);
+    build_block_children(ts_node_child_by_field_name(handler, "body", 4), src,
+                         c.children);
+    out.emplace_back(std::move(c));
+  }
+  TSNode fin = ts_node_child_by_field_name(n, "finalizer", 9);
+  if (!ts_node_is_null(fin)) {
+    GSGNode f;
+    f.kind = GSGNodeKind::Finally;
+    f.loc = loc(fin);
+    build_block_children(ts_node_child_by_field_name(fin, "body", 4), src,
+                         f.children);
+    out.emplace_back(std::move(f));
+  }
+}
+
 void JavaScriptGSGBuilder::build_block_children(TSNode n, const string& src,
-                                                std::vector<GSGNode>& out,
-                                                int nesting) {
+                                                std::vector<GSGNode>& out) {
+  if (ts_node_is_null(n)) return;
   int m = ts_node_named_child_count(n);
   for (int i = 0; i < m; ++i) {
     TSNode s = ts_node_named_child(n, i);
     string ty = t(s);
     if (ty == "if_statement")
-      out.emplace_back(build_if(s, src));
+      build_if(s, src, out);
     else if (ty == "while_statement")
       out.emplace_back(build_while(s, src));
     else if (ty == "for_statement")
@@ -176,163 +244,68 @@ void JavaScriptGSGBuilder::build_block_children(TSNode n, const string& src,
       out.emplace_back(build_do_while(s, src));
     else if (ty == "function_declaration" || ty == "method_definition")
       out.emplace_back(build_function(s, src));
-    else if (ty == "switch_statement") {
-      GSGNode sw;
-      sw.kind = GSGNodeKind::Switch;
-      sw.loc = loc(s);
-      TSNode body = ts_node_child_by_field_name(s, "body", 4);
-      if (!ts_node_is_null(body)) {
-        int kmax = ts_node_named_child_count(body);
-        for (int k = 0; k < kmax; ++k) {
-          TSNode cc = ts_node_named_child(body, k);
-          string cty = t(cc);
-          if (cty == "switch_case" || cty == "switch_default") {
-            GSGNode cs;
-            cs.kind = GSGNodeKind::Case;
-            cs.loc = loc(cc);
-            TSNode cbody = ts_node_child_by_field_name(cc, "consequent", 10);
-            if (!ts_node_is_null(cbody)) {
-              string cbty = t(cbody);
-              if (cbty == "return_statement") {
-                TSNode arg = ts_node_child_by_field_name(cbody, "argument", 8);
-                if (ts_node_is_null(arg) &&
-                    ts_node_named_child_count(cbody) > 0)
-                  arg = ts_node_named_child(cbody, 0);
-                if (!ts_node_is_null(arg)) {
-                  unsigned int cost =
-                    js_count_bool_ops_expr(arg, nesting + 1, src);
-                  if (cost) {
-                    GSGNode e;
-                    e.kind = GSGNodeKind::Expr;
-                    e.loc = loc(cbody);
-                    e.addl_cost = cost;
-                    cs.children.emplace_back(std::move(e));
-                  }
-                }
-              } else if (cbty == "expression_statement") {
-                if (ts_node_named_child_count(cbody) > 0) {
-                  TSNode expr = ts_node_named_child(cbody, 0);
-                  unsigned int cost =
-                    js_count_bool_ops_expr(expr, nesting + 1, src);
-                  if (cost) {
-                    GSGNode e;
-                    e.kind = GSGNodeKind::Expr;
-                    e.loc = loc(expr);
-                    e.addl_cost = cost;
-                    cs.children.emplace_back(std::move(e));
-                  }
-                }
-              } else {
-                build_block_children(cbody, src, cs.children, nesting + 1);
-              }
-            }
-            sw.children.emplace_back(std::move(cs));
-          }
-        }
-      }
-      out.emplace_back(std::move(sw));
-    } else if (ty == "expression_statement") {
+    else if (ty == "switch_statement")
+      build_switch(s, src, out);
+    else if (ty == "try_statement")
+      build_try(s, src, out);
+    else if (ty == "statement_block")
+      build_block_children(s, src, out);
+    else if (ty == "expression_statement") {
       if (ts_node_named_child_count(s) > 0) {
         TSNode expr = ts_node_named_child(s, 0);
-        unsigned int cost = js_count_bool_ops_expr(expr, nesting, src);
-        if (cost) {
-          GSGNode e;
-          e.kind = GSGNodeKind::Expr;
-          e.loc = loc(expr);
-          e.addl_cost = cost;
-          out.emplace_back(std::move(e));
-        }
+        push_expr(out, expr, expr, src);
       }
     } else if (ty == "return_statement") {
       TSNode arg = ts_node_child_by_field_name(s, "argument", 8);
       if (ts_node_is_null(arg) && ts_node_named_child_count(s) > 0)
         arg = ts_node_named_child(s, 0);
-      if (!ts_node_is_null(arg)) {
-        unsigned int cost = js_count_bool_ops_expr(arg, nesting, src);
-        if (cost) {
-          GSGNode e;
-          e.kind = GSGNodeKind::Expr;
-          e.loc = loc(s);
-          e.addl_cost = cost;
-          out.emplace_back(std::move(e));
-        }
-      }
+      if (!ts_node_is_null(arg)) push_expr(out, s, arg, src);
     } else if (ty == "throw_statement") {
       TSNode arg = ts_node_child_by_field_name(s, "argument", 8);
-      if (!ts_node_is_null(arg)) {
-        unsigned int cost = js_count_bool_ops_expr(arg, nesting, src);
-        if (cost) {
-          GSGNode e;
-          e.kind = GSGNodeKind::Expr;
-          e.loc = loc(s);
-          e.addl_cost = cost;
-          out.emplace_back(std::move(e));
-        }
-      }
+      if (!ts_node_is_null(arg)) push_expr(out, s, arg, src);
     } else if (ty == "lexical_declaration" || ty == "variable_declaration") {
-      int dn = ts_node_named_child_count(s);
-      unsigned int sum = 0;
-      for (int di = 0; di < dn; ++di) {
-        TSNode d = ts_node_named_child(s, di);
-        sum += js_count_bool_ops_expr(d, nesting, src);
-      }
-      if (sum) {
-        GSGNode e;
-        e.kind = GSGNodeKind::Expr;
-        e.loc = loc(s);
-        e.addl_cost = sum;
-        out.emplace_back(std::move(e));
-      }
+      push_expr(out, s, s, src);
     }
   }
 }
 
-GSGNode JavaScriptGSGBuilder::build_if(TSNode n, const string& src) {
+void JavaScriptGSGBuilder::build_if(TSNode n, const string& src,
+                                    std::vector<GSGNode>& out,
+                                    GSGNodeKind kind) {
   GSGNode g;
-  g.kind = GSGNodeKind::If;
+  g.kind = kind;
   g.loc = loc(n);
-  TSNode cond = ts_node_child_by_field_name(n, "condition", 9);
-  if (!ts_node_is_null(cond))
-    g.addl_cost += js_count_bool_ops_expr(cond, 0, src);
-  TSNode cons = ts_node_child_by_field_name(n, "consequence", 11);
-  if (!ts_node_is_null(cons)) build_block_children(cons, src, g.children, 1);
+  push_header(g, ts_node_child_by_field_name(n, "condition", 9), src);
+  build_block_children(ts_node_child_by_field_name(n, "consequence", 11), src,
+                       g.children);
+  out.emplace_back(std::move(g));
   TSNode alt = ts_node_child_by_field_name(n, "alternative", 11);
-  if (!ts_node_is_null(alt)) {
-    string ty = t(alt);
-    if (ty == "if_statement") {
-      auto eif = build_if(alt, src);
-      eif.kind = GSGNodeKind::ElseIf;
-      g.children.emplace_back(std::move(eif));
-    } else {
-      int an = ts_node_named_child_count(alt);
-      if (an == 1) {
-        TSNode only = ts_node_named_child(alt, 0);
-        if (!ts_node_is_null(only) && t(only) == "if_statement") {
-          auto eif = build_if(only, src);
-          eif.kind = GSGNodeKind::ElseIf;
-          g.children.emplace_back(std::move(eif));
-          return g;
-        }
-      }
-      GSGNode el;
-      el.kind = GSGNodeKind::Else;
-      el.loc = loc(alt);
-      build_block_children(alt, src, el.children, 1);
-      g.children.emplace_back(std::move(el));
+  if (ts_node_is_null(alt)) return;
+  if (t(alt) == "if_statement") {
+    build_if(alt, src, out, GSGNodeKind::ElseIf);
+    return;
+  }
+  if (ts_node_named_child_count(alt) == 1) {
+    TSNode only = ts_node_named_child(alt, 0);
+    if (t(only) == "if_statement") {
+      build_if(only, src, out, GSGNodeKind::ElseIf);
+      return;
     }
   }
-  return g;
+  GSGNode el;
+  el.kind = GSGNodeKind::Else;
+  el.loc = loc(alt);
+  build_block_children(alt, src, el.children);
+  out.emplace_back(std::move(el));
 }
 
 GSGNode JavaScriptGSGBuilder::build_while(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::While;
   g.loc = loc(n);
-  TSNode cond = ts_node_child_by_field_name(n, "condition", 9);
-  if (!ts_node_is_null(cond))
-    g.addl_cost += js_count_bool_ops_expr(cond, 0, src);
-  TSNode body = ts_node_child_by_field_name(n, "body", 4);
-  if (!ts_node_is_null(body)) build_block_children(body, src, g.children, 1);
+  push_header(g, ts_node_child_by_field_name(n, "condition", 9), src);
+  build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
+                       g.children);
   return g;
 }
 
@@ -340,20 +313,19 @@ GSGNode JavaScriptGSGBuilder::build_for(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::For;
   g.loc = loc(n);
-  TSNode body = ts_node_child_by_field_name(n, "body", 4);
-  if (!ts_node_is_null(body)) build_block_children(body, src, g.children, 1);
+  build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
+                       g.children);
   return g;
 }
 
 GSGNode JavaScriptGSGBuilder::build_do_while(TSNode n, const string& src) {
-  (void)src;
   GSGNode g;
   g.kind = GSGNodeKind::DoWhile;
   g.loc = loc(n);
   TSNode cond = ts_node_child_by_field_name(n, "condition", 9);
   if (!ts_node_is_null(cond))
     g.addl_cost += js_count_bool_alternations(cond, src);
-  TSNode body = ts_node_child_by_field_name(n, "body", 4);
-  if (!ts_node_is_null(body)) build_block_children(body, src, g.children, 1);
+  build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
+                       g.children);
   return g;
 }

@@ -22,14 +22,20 @@ class CLikeGSGBuilder : public IBuilder {
   GSGNode build_function(TSNode n, const std::string& src,
                          const std::string& qual);
   void build_block_children(TSNode n, const std::string& src,
-                            std::vector<GSGNode>& out, int nesting = 0);
-  GSGNode build_if(TSNode n, const std::string& src);
+                            std::vector<GSGNode>& out);
+  void build_if(TSNode n, const std::string& src, std::vector<GSGNode>& out,
+                GSGNodeKind kind = GSGNodeKind::If);
+  void build_switch(TSNode s, const std::string& src,
+                    std::vector<GSGNode>& out);
+  void build_try(TSNode s, const std::string& src, std::vector<GSGNode>& out);
   GSGNode build_while(TSNode n, const std::string& src);
   GSGNode build_for(TSNode n, const std::string& src);
   GSGNode build_do_while(TSNode n, const std::string& src);
 
-  static unsigned int c_count_bool_ops_expr(TSNode n, int nesting,
-                                            const std::string& src);
+  static void collect_expr(TSNode n, const std::string& src, GSGNode& into);
+  static void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,
+                        const std::string& src);
+  static void push_header(GSGNode& stmt, TSNode expr, const std::string& src);
 
   // lambdas
   static void collect_lambdas_in_node(TSNode n, const std::string& src,

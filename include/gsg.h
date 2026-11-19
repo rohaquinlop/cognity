@@ -24,6 +24,7 @@ enum class GSGNodeKind {
   Class,
   Function,
   Block,
+  Header,
   If,
   ElseIf,
   Else,
