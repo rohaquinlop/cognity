@@ -142,7 +142,10 @@ cmd_lint() {
     log "lint: no changed C/C++ files vs $(git rev-parse --short "$base")"
     return 0
   fi
-  [ -f "$BUILD_DIR/compile_commands.json" ] || cmd_configure
+  if [ ! -f "$BUILD_DIR/compile_commands.json" ] ||
+    [ CMakeLists.txt -nt "$BUILD_DIR/compile_commands.json" ]; then
+    cmd_configure
+  fi
 
   local tus=() header_changed=0 f
   for f in "${changed[@]}"; do

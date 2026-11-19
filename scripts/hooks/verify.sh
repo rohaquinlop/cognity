@@ -19,7 +19,10 @@ fi
 # One retry per stop: a second failure goes to the user instead of looping.
 [ "$(jq -r '.stop_hook_active // false' <<<"$input")" = "true" ] && exit 0
 
-base=$(git merge-base "${CHECK_BASE:-origin/main}" HEAD 2>/dev/null) || base=HEAD
+if ! base=$(git merge-base "${CHECK_BASE:-origin/main}" HEAD 2>/dev/null); then
+  echo "verify: cannot resolve merge-base with ${CHECK_BASE:-origin/main}; checking uncommitted changes only (run: git fetch origin)" >&2
+  base=HEAD
+fi
 watched='^(src/|include/|tests/|scripts/|CMakeLists\.txt$|\.clang-(format|tidy)$)'
 changed=$({
   git diff --name-only "$base"
