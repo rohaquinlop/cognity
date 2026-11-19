@@ -54,16 +54,34 @@ void PythonGSGBuilder::collect_bool_chain(TSNode node, const string& source,
   }
 }
 
-void PythonGSGBuilder::push_defaults(GSGNode& fn, TSNode parameters,
-                                     const string& source) {
+void PythonGSGBuilder::collect_defaults(TSNode parameters, const string& source,
+                                        GSGNode& into) {
   if (ts_node_is_null(parameters)) return;
   uint32_t n = ts_node_named_child_count(parameters);
   for (uint32_t i = 0; i < n; ++i) {
     TSNode p = ts_node_named_child(parameters, i);
     string pt = node_type(p);
     if (pt == "default_parameter" || pt == "typed_default_parameter")
-      push_header(fn, ts_node_child_by_field_name(p, "value", 5), source);
+      collect_expr(ts_node_child_by_field_name(p, "value", 5), source, into);
   }
+}
+
+void PythonGSGBuilder::collect_definition_header(TSNode decorated, TSNode def,
+                                                 const string& source,
+                                                 GSGNode& into) {
+  if (!ts_node_is_null(decorated)) {
+    uint32_t n = ts_node_named_child_count(decorated);
+    for (uint32_t i = 0; i < n; ++i) {
+      TSNode d = ts_node_named_child(decorated, i);
+      if (node_type(d) == "decorator") collect_expr(d, source, into);
+    }
+  }
+  if (node_type(def) == "class_definition")
+    collect_expr(ts_node_child_by_field_name(def, "superclasses", 12), source,
+                 into);
+  else
+    collect_defaults(ts_node_child_by_field_name(def, "parameters", 10), source,
+                     into);
 }
 
 void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
@@ -77,8 +95,11 @@ void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
   }
   if (t == "lambda") {
     GSGNode fn = expr_node(GSGNodeKind::Function, node);
-    push_defaults(fn, ts_node_child_by_field_name(node, "parameters", 10),
-                  source);
+    GSGNode defaults = expr_node(GSGNodeKind::Header, node);
+    collect_defaults(ts_node_child_by_field_name(node, "parameters", 10),
+                     source, defaults);
+    if (defaults.addl_cost || !defaults.children.empty())
+      fn.children.emplace_back(std::move(defaults));
     collect_expr(ts_node_child_by_field_name(node, "body", 4), source, fn);
     into.children.emplace_back(std::move(fn));
     return;
@@ -191,25 +212,101 @@ GSGNode PythonGSGBuilder::build_function(TSNode node, const string& source) {
   f.kind = GSGNodeKind::Function;
   f.name = std::string(get_identifier(node, source));
   f.loc = loc_from_node(node);
-
-  TSNode body = ts_node_child_by_field_name(node, "body", 4);
-  if (!ts_node_is_null(body)) {
-    int bn = ts_node_named_child_count(body);
-    if (bn == 2) {
-      TSNode first = ts_node_named_child(body, 0);
-      TSNode second = ts_node_named_child(body, 1);
-      if (node_type(first) == "function_definition" &&
-          node_type(second) == "return_statement") {
-        TSNode inner_body = ts_node_child_by_field_name(first, "body", 4);
-        if (!ts_node_is_null(inner_body)) {
-          build_block_children(inner_body, source, f.children);
-          return f;
-        }
-      }
-    }
-    build_block_children(body, source, f.children);
-  }
+  build_function_body(node, source, f.children);
   return f;
+}
+
+static std::vector<TSNode> statements_of(TSNode block) {
+  std::vector<TSNode> out;
+  if (ts_node_is_null(block)) return out;
+  uint32_t n = ts_node_named_child_count(block);
+  for (uint32_t i = 0; i < n; ++i) {
+    TSNode ch = ts_node_named_child(block, i);
+    if (!ts_node_is_extra(ch)) out.push_back(ch);
+  }
+  return out;
+}
+
+static bool is_docstring(TSNode stmt) {
+  if (node_type(stmt) != "expression_statement" ||
+      ts_node_named_child_count(stmt) != 1)
+    return false;
+  string t = node_type(ts_node_named_child(stmt, 0));
+  return t == "string" || t == "concatenated_string";
+}
+
+static TSNode definition_of(TSNode stmt) {
+  if (node_type(stmt) == "decorated_definition")
+    return ts_node_child_by_field_name(stmt, "definition", 10);
+  return stmt;
+}
+
+bool PythonGSGBuilder::returns_inner(TSNode ret, string_view inner,
+                                     const string& source) {
+  auto is_inner = [&](TSNode e) {
+    return !ts_node_is_null(e) && node_type(e) == "identifier" &&
+           slice_source(source, e) == inner;
+  };
+  std::vector<TSNode> parts = statements_of(ret);
+  if (parts.size() != 1) return false;
+  TSNode value = parts[0];
+  if (node_type(value) != "call") return is_inner(value);
+  if (is_inner(ts_node_child_by_field_name(value, "function", 8))) return false;
+  TSNode args = ts_node_child_by_field_name(value, "arguments", 9);
+  if (ts_node_is_null(args) || node_type(args) != "argument_list") return false;
+  for (TSNode a : statements_of(args)) {
+    if (node_type(a) == "keyword_argument"
+          ? is_inner(ts_node_child_by_field_name(a, "value", 5))
+          : is_inner(a))
+      return true;
+  }
+  return false;
+}
+
+void PythonGSGBuilder::build_function_body(TSNode def, const string& source,
+                                           std::vector<GSGNode>& out) {
+  TSNode body = ts_node_child_by_field_name(def, "body", 4);
+  std::vector<TSNode> stmts = statements_of(body);
+  size_t first = (!stmts.empty() && is_docstring(stmts[0])) ? 1 : 0;
+  if (stmts.size() == first + 2 &&
+      node_type(stmts[first + 1]) == "return_statement") {
+    TSNode inner = definition_of(stmts[first]);
+    if (!ts_node_is_null(inner) && node_type(inner) == "function_definition" &&
+        returns_inner(stmts[first + 1], get_identifier(inner, source),
+                      source)) {
+      GSGNode header = expr_node(GSGNodeKind::Expr, stmts[first]);
+      collect_definition_header(
+        ts_node_eq(inner, stmts[first]) ? TSNode{} : stmts[first], inner,
+        source, header);
+      if (header.addl_cost || !header.children.empty())
+        out.emplace_back(std::move(header));
+      build_function_body(inner, source, out);
+      push_expr(out, stmts[first + 1], stmts[first + 1], source);
+      return;
+    }
+  }
+  build_block_children(body, source, out);
+}
+
+void PythonGSGBuilder::build_definition(TSNode stmt, const string& source,
+                                        std::vector<GSGNode>& out) {
+  TSNode def = definition_of(stmt);
+  if (ts_node_is_null(def)) return;
+  bool is_class = node_type(def) == "class_definition";
+  if (!is_class && node_type(def) != "function_definition") return;
+  GSGNode g =
+    expr_node(is_class ? GSGNodeKind::Class : GSGNodeKind::Function, def);
+  GSGNode header = expr_node(GSGNodeKind::Header, stmt);
+  collect_definition_header(ts_node_eq(def, stmt) ? TSNode{} : stmt, def,
+                            source, header);
+  if (header.addl_cost || !header.children.empty())
+    g.children.emplace_back(std::move(header));
+  if (is_class)
+    build_block_children(ts_node_child_by_field_name(def, "body", 4), source,
+                         g.children);
+  else
+    build_function_body(def, source, g.children);
+  out.emplace_back(std::move(g));
 }
 
 void PythonGSGBuilder::build_try(TSNode node, const string& source,
@@ -322,8 +419,9 @@ void PythonGSGBuilder::build_block_children(TSNode block, const string& source,
       out.emplace_back(std::move(w));
     } else if (t == "expression_statement") {
       build_expression_statement(stmt, source, out);
-    } else if (t == "function_definition") {
-      out.emplace_back(build_function(stmt, source));
+    } else if (t == "function_definition" || t == "class_definition" ||
+               t == "decorated_definition") {
+      build_definition(stmt, source, out);
     }
   }
 }

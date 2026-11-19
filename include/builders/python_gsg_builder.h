@@ -10,6 +10,10 @@ class PythonGSGBuilder : public IBuilder {
 
  private:
   GSGNode build_function(TSNode node, const std::string& source);
+  void build_function_body(TSNode def, const std::string& source,
+                           std::vector<GSGNode>& out);
+  void build_definition(TSNode stmt, const std::string& source,
+                        std::vector<GSGNode>& out);
   void build_block_children(TSNode block, const std::string& source,
                             std::vector<GSGNode>& out);
   void build_expression_statement(TSNode stmt, const std::string& source,
@@ -35,7 +39,12 @@ class PythonGSGBuilder : public IBuilder {
                                  GSGNode& into, std::string& previous);
   static void collect_assignment(TSNode node, const std::string& source,
                                  GSGNode& into);
-  static void push_defaults(GSGNode& fn, TSNode parameters,
+  static void collect_defaults(TSNode parameters, const std::string& source,
+                               GSGNode& into);
+  static void collect_definition_header(TSNode decorated, TSNode def,
+                                        const std::string& source,
+                                        GSGNode& into);
+  static bool returns_inner(TSNode ret, std::string_view inner,
                             const std::string& source);
   static void collect_expr(TSNode node, const std::string& source,
                            GSGNode& into);
