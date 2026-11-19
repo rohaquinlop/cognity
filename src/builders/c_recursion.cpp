@@ -79,16 +79,15 @@ TSNode declared_name(TSNode decl) {
 }
 
 bool declares_function(TSNode decl) {
-  while (!ts_node_is_null(decl) && (type_of(decl) == "pointer_declarator" ||
-                                    type_of(decl) == "reference_declarator")) {
+  string_view last;
+  while (!ts_node_is_null(decl) && type_of(decl).ends_with("_declarator")) {
+    if (type_of(decl) != "parenthesized_declarator") last = type_of(decl);
     TSNode inner = field(decl, "declarator");
     if (ts_node_is_null(inner) && ts_node_named_child_count(decl) > 0)
       inner = ts_node_named_child(decl, ts_node_named_child_count(decl) - 1);
     decl = inner;
   }
-  if (ts_node_is_null(decl) || type_of(decl) != "function_declarator")
-    return false;
-  return type_of(field(decl, "declarator")) != "parenthesized_declarator";
+  return last == "function_declarator";
 }
 
 void collect_locals(TSNode n, const string& src,

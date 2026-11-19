@@ -38,3 +38,14 @@ int *f2(int n) {
   int *f2(int);
   return f2(n);
 }
+
+int (*f3(int n))(int) {
+  int (*f3(int))(int);
+  f3(n);
+  return 0;
+}
+
+int g(int n) {
+  int(g)(int);
+  return g(n);
+}
