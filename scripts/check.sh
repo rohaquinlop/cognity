@@ -43,7 +43,6 @@ require_clang_tools() {
   fi
 }
 
-# Prints C/C++ project files (tracked + untracked, not ignored), one per line.
 # Fixtures under tests/src/ are analyzer inputs and are never checked.
 project_files() {
   {
@@ -104,7 +103,6 @@ resolve_base() {
   fi
 }
 
-# Prints changed C/C++ project files (vs base, plus untracked).
 changed_files() {
   local base=$1
   {
@@ -113,7 +111,6 @@ changed_files() {
   } | grep -E "$CXX_RE" | grep -v '^tests/src/' | sort -u || true
 }
 
-# Prints clang-tidy --line-filter JSON for the changed lines of each file.
 line_filter_json() {
   local base=$1
   shift
