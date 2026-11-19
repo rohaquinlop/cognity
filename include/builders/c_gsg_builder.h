@@ -6,6 +6,8 @@
 // Minimal C/C++ builder (reused for both languages)
 class CLikeGSGBuilder : public IBuilder {
  public:
+  explicit CLikeGSGBuilder(bool cpp = false) : cpp_(cpp) {}
+
   std::vector<GSGNode> build_functions(TSNode root,
                                        const std::string& source) override;
 
@@ -14,6 +16,8 @@ class CLikeGSGBuilder : public IBuilder {
   static SourceLoc loc(TSNode n);
 
  private:
+  bool cpp_;
+
   static std::string_view slice(const std::string& src, TSNode n);
   static std::string function_name_from_declarator(TSNode decl,
                                                    const std::string& src);
