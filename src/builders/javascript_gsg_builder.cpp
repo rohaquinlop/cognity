@@ -33,9 +33,19 @@ string_view JavaScriptGSGBuilder::name_of(TSNode n, const string& src) {
 }
 
 static TSNode js_unwrap_parens(TSNode n) {
-  while (!ts_node_is_null(n) && t(n) == "parenthesized_expression" &&
-         ts_node_named_child_count(n) == 1)
-    n = ts_node_named_child(n, 0);
+  while (!ts_node_is_null(n) && t(n) == "parenthesized_expression") {
+    TSNode only{};
+    uint32_t count = 0;
+    uint32_t m = ts_node_named_child_count(n);
+    for (uint32_t i = 0; i < m; ++i) {
+      TSNode ch = ts_node_named_child(n, i);
+      if (ts_node_is_extra(ch)) continue;
+      only = ch;
+      ++count;
+    }
+    if (count != 1) break;
+    n = only;
+  }
   return n;
 }
 

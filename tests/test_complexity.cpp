@@ -112,6 +112,7 @@ int main() {
     {"tests/src/python/test_definition_headers.py", 3},
     {"tests/src/python/test_function_discovery.py", 2},
     {"tests/src/python/test_nested_definitions.py", 4},
+    {"tests/src/python/test_bool_paren_comment.py", 1},
   };
 
   bool ok = true;
@@ -139,6 +140,7 @@ int main() {
     {"tests/src/javascript/test_bool_ops.js", 9},
     {"tests/src/javascript/test_arrow.js", 7},
     {"tests/src/javascript/test_headers.js", 8},
+    {"tests/src/javascript/test_bool_paren_comment.js", 1},
   };
   for (const auto& [path, exp] : js_expected) {
     unsigned int got = 0;
@@ -182,6 +184,7 @@ int main() {
     {"tests/src/c/test_if.c", 4},
     {"tests/src/c/test_ternary_nested.c", 5},
     {"tests/src/c/test_bool_ops.c", 9},
+    {"tests/src/c/test_bool_paren_comment.c", 1},
   };
   for (const auto& [path, exp] : c_expected) {
     unsigned int got = 0;

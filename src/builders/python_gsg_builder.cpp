@@ -31,9 +31,19 @@ string_view PythonGSGBuilder::get_identifier(TSNode node,
 
 static TSNode unwrap_parens(TSNode node) {
   while (!ts_node_is_null(node) &&
-         node_type(node) == "parenthesized_expression" &&
-         ts_node_named_child_count(node) == 1)
-    node = ts_node_named_child(node, 0);
+         node_type(node) == "parenthesized_expression") {
+    TSNode only{};
+    uint32_t count = 0;
+    uint32_t m = ts_node_named_child_count(node);
+    for (uint32_t i = 0; i < m; ++i) {
+      TSNode ch = ts_node_named_child(node, i);
+      if (ts_node_is_extra(ch)) continue;
+      only = ch;
+      ++count;
+    }
+    if (count != 1) break;
+    node = only;
+  }
   return node;
 }
 
