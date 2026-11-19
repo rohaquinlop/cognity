@@ -49,3 +49,8 @@ int g(int n) {
   int(g)(int);
   return g(n);
 }
+
+int (*h(int a, int b))(int) {
+  h(a, b);
+  return 0;
+}

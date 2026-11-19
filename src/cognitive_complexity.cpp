@@ -5,6 +5,7 @@
 #include "../include/gsg.h"
 
 #include <algorithm>
+#include <ranges>
 
 static inline LineComplexity build_line_complexity_from_loc(
   const SourceLoc& loc, unsigned int c) {

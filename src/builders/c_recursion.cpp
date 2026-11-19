@@ -36,9 +36,15 @@ string scope_of(const string& qualified) {
 }
 
 TSNode function_declarator(TSNode decl) {
-  while (!ts_node_is_null(decl) && type_of(decl) != "function_declarator")
-    decl = field(decl, "declarator");
-  return decl;
+  TSNode found{};
+  while (!ts_node_is_null(decl) && type_of(decl).ends_with("_declarator")) {
+    if (type_of(decl) == "function_declarator") found = decl;
+    TSNode inner = field(decl, "declarator");
+    if (ts_node_is_null(inner) && ts_node_named_child_count(decl) > 0)
+      inner = ts_node_named_child(decl, ts_node_named_child_count(decl) - 1);
+    decl = inner;
+  }
+  return found;
 }
 
 void arity(TSNode def, const string& src, uint32_t& min_args,
