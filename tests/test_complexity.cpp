@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../include/cognitive_complexity.h"
+#include "../include/recursion.h"
 
 extern "C" {
 const TSLanguage* tree_sitter_python();
@@ -243,6 +244,37 @@ int main() {
     if (got != exp) {
       std::cerr << "Line cost mismatch for test_try_nested.py line " << row + 1
                 << ": expected " << exp << ", got " << got << "\n";
+      ok = false;
+    }
+  }
+
+  {
+    const std::size_t count = 20000;
+    std::vector<uint32_t> starts(count);
+    std::vector<std::vector<CallEdge>> edges(count);
+    for (std::size_t i = 0; i < count; ++i) {
+      starts[i] = static_cast<uint32_t>(i);
+      edges[i].push_back({.callee = (i + 1) % count, .call = SourceLoc{}});
+    }
+    if (recursive_defs_from_graph(starts, edges).size() != count) {
+      std::cerr << "Recursion: 20000-def cycle not fully detected\n";
+      ok = false;
+    }
+    std::vector<std::vector<CallEdge>> chain = {
+      {{.callee = 1, .call = SourceLoc{.row = 1}}},
+      {{.callee = 2, .call = SourceLoc{.row = 2}}},
+      {}};
+    if (!recursive_defs_from_graph({0, 1, 2}, chain).empty()) {
+      std::cerr << "Recursion: acyclic chain reported as recursive\n";
+      ok = false;
+    }
+    std::vector<std::vector<CallEdge>> self = {
+      {{.callee = 1, .call = SourceLoc{.row = 3}},
+       {.callee = 0, .call = SourceLoc{.row = 4}}},
+      {}};
+    auto found = recursive_defs_from_graph({0, 1}, self);
+    if (found.size() != 1 || found[0].call.row != 4) {
+      std::cerr << "Recursion: self call not reported on its first call row\n";
       ok = false;
     }
   }

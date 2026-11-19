@@ -43,7 +43,11 @@ static string compute_ancestor_qual(TSNode n, const string& src) {
 
 SourceLoc CLikeGSGBuilder::loc(TSNode n) {
   TSPoint p = ts_node_start_point(n), q = ts_node_end_point(n);
-  return SourceLoc{p.row, p.column, q.column};
+  return SourceLoc{.row = p.row,
+                   .start_col = p.column,
+                   .end_col = q.column,
+                   .start_byte = ts_node_start_byte(n),
+                   .end_byte = ts_node_end_byte(n)};
 }
 
 string_view CLikeGSGBuilder::slice(const string& src, TSNode n) {

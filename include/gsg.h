@@ -3,6 +3,7 @@
 
 #include <tree_sitter/api.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -50,6 +51,13 @@ struct SourceLoc {
   unsigned int row{0};
   unsigned int start_col{0};
   unsigned int end_col{0};
+  uint32_t start_byte{0};
+  uint32_t end_byte{0};
+};
+
+struct RecursiveDef {
+  uint32_t def_start_byte{0};
+  SourceLoc call{};
 };
 
 struct GSGNode {
@@ -65,6 +73,10 @@ struct IBuilder {
   // Build function-level GSG nodes found in the file/module root
   virtual std::vector<GSGNode> build_functions(TSNode root,
                                                const std::string& source) = 0;
+  virtual std::vector<RecursiveDef> recursive_defs(TSNode /*root*/,
+                                                   const std::string& /*src*/) {
+    return {};
+  }
 };
 
 std::unique_ptr<IBuilder> make_builder(Language lang);

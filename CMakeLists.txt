@@ -110,6 +110,7 @@ set(SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/file_operations.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/cognitive_complexity.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/recursion.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/python_gsg_builder.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/javascript_gsg_builder.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/builders/c_gsg_builder.cpp"
@@ -133,6 +134,7 @@ target_compile_definitions(cognity PRIVATE COGNITY_VERSION="${PROJECT_VERSION}")
 add_executable(cognity_tests
   tests/test_complexity.cpp
   src/cognitive_complexity.cpp
+  src/recursion.cpp
   src/builders/python_gsg_builder.cpp
   src/builders/javascript_gsg_builder.cpp
   src/builders/c_gsg_builder.cpp

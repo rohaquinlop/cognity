@@ -14,7 +14,11 @@ static inline string node_type(TSNode n) {
 
 SourceLoc PythonGSGBuilder::loc_from_node(TSNode node) {
   TSPoint p = ts_node_start_point(node), q = ts_node_end_point(node);
-  return SourceLoc{p.row, p.column, q.column};
+  return SourceLoc{.row = p.row,
+                   .start_col = p.column,
+                   .end_col = q.column,
+                   .start_byte = ts_node_start_byte(node),
+                   .end_byte = ts_node_end_byte(node)};
 }
 
 string_view PythonGSGBuilder::slice_source(const string& source, TSNode node) {
