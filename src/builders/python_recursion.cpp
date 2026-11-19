@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -36,6 +37,29 @@ struct Binding {
   uint32_t pos;
   int id;
   uint32_t block;
+  uint32_t at;
+};
+
+struct Range {
+  uint32_t start;
+  uint32_t end;
+
+  [[nodiscard]] bool contains(uint32_t x) const {
+    return start <= x && x < end;
+  }
+};
+
+struct Flow {
+  std::vector<TSNode> loops;
+  std::vector<std::vector<Range>> branches;
+  std::vector<Range> guards;
+  std::vector<std::pair<Range, std::vector<Range>>> handlers;
+};
+
+struct Span {
+  uint32_t start;
+  uint32_t end;
+  uint32_t bound;
 };
 
 struct Scope {
@@ -46,10 +70,12 @@ struct Scope {
   std::unordered_set<string> globals;
   std::unordered_set<string> nonlocals;
   bool star{false};
+  Flow flow;
 };
 
 struct Def {
   uint32_t start;
+  Span span{};
   int cls{kNone};
   string receiver;
 };
@@ -57,6 +83,7 @@ struct Def {
 struct ClassInfo {
   uint32_t start;
   uint32_t end;
+  uint32_t bound;
   int body_scope;
   std::unordered_map<string, std::vector<int>> methods;
 };
@@ -79,6 +106,245 @@ bool is_comprehension(string_view t) {
          t == "dictionary_comprehension" || t == "generator_expression";
 }
 
+Range range_of(TSNode n) {
+  return {.start = ts_node_start_byte(n), .end = ts_node_end_byte(n)};
+}
+
+std::vector<TSNode> statements(TSNode block) {
+  std::vector<TSNode> out;
+  if (ts_node_is_null(block)) return out;
+  uint32_t n = ts_node_named_child_count(block);
+  for (uint32_t i = 0; i < n; ++i) {
+    TSNode ch = ts_node_named_child(block, i);
+    if (type_of(ch) != "comment") out.push_back(ch);
+  }
+  return out;
+}
+
+std::optional<Range> suite_range(TSNode block) {
+  const std::vector<TSNode> stmts = statements(block);
+  if (stmts.empty()) return std::nullopt;
+  return Range{.start = ts_node_start_byte(stmts.front()),
+               .end = ts_node_end_byte(stmts.back())};
+}
+
+uint32_t bound_of(TSNode body, uint32_t fallback) {
+  const std::vector<TSNode> stmts = statements(body);
+  return stmts.empty() ? fallback : ts_node_start_byte(stmts.front());
+}
+
+std::optional<std::size_t> position(const std::vector<TSNode>& suite,
+                                    uint32_t offset) {
+  for (std::size_t i = 0; i < suite.size(); ++i)
+    if (range_of(suite[i]).contains(offset)) return i;
+  return std::nullopt;
+}
+
+bool repeats(TSNode loop, uint32_t offset) {
+  const std::optional<Range> body = suite_range(field(loop, "body"));
+  if (body && body->contains(offset)) return true;
+  TSNode head =
+    field(loop, type_of(loop) == "for_statement" ? "left" : "condition");
+  return !ts_node_is_null(head) && range_of(head).contains(offset);
+}
+
+std::optional<std::size_t> branch_of(const std::vector<Range>& branches,
+                                     uint32_t offset) {
+  for (std::size_t i = 0; i < branches.size(); ++i)
+    if (branches[i].contains(offset)) return i;
+  return std::nullopt;
+}
+
+struct Branch {
+  TSNode clause;
+  TSNode suite;
+};
+
+std::vector<Branch> branches_of(TSNode statement) {
+  std::vector<Branch> out;
+  string_view t = type_of(statement);
+  if (t == "if_statement") {
+    out.push_back(
+      {.clause = TSNode{}, .suite = field(statement, "consequence")});
+    uint32_t n = ts_node_named_child_count(statement);
+    for (uint32_t i = 0; i < n; ++i) {
+      TSNode ch = ts_node_named_child(statement, i);
+      if (type_of(ch) == "elif_clause")
+        out.push_back({.clause = ch, .suite = field(ch, "consequence")});
+      else if (type_of(ch) == "else_clause")
+        out.push_back({.clause = ch, .suite = field(ch, "body")});
+    }
+  } else if (t == "match_statement") {
+    TSNode body = field(statement, "body");
+    uint32_t n = ts_node_named_child_count(body);
+    for (uint32_t i = 0; i < n; ++i) {
+      TSNode ch = ts_node_named_child(body, i);
+      if (type_of(ch) == "case_clause")
+        out.push_back({.clause = ch, .suite = field(ch, "consequence")});
+    }
+  }
+  return out;
+}
+
+std::optional<std::vector<TSNode>> shared_branch(TSNode statement,
+                                                 uint32_t start) {
+  for (const Branch& b : branches_of(statement)) {
+    const std::optional<Range> r = suite_range(b.suite);
+    if (r && r->contains(start)) return statements(b.suite);
+  }
+  return std::nullopt;
+}
+
+bool ends_pass(TSNode statement) {
+  std::vector<TSNode> stack{statement};
+  while (!stack.empty()) {
+    TSNode cur = stack.back();
+    stack.pop_back();
+    if (ts_node_is_null(cur)) continue;
+    string_view t = type_of(cur);
+    if (t == "break_statement" || t == "continue_statement") return true;
+    if (t == "for_statement" || t == "while_statement") {
+      stack.push_back(field(cur, "alternative"));
+    } else if (t != "function_definition" && t != "class_definition" &&
+               t != "decorated_definition") {
+      for (uint32_t i = ts_node_named_child_count(cur); i > 0; --i)
+        stack.push_back(ts_node_named_child(cur, i - 1));
+    }
+  }
+  return false;
+}
+
+struct Level {
+  std::vector<TSNode> suite;
+  std::size_t def_index;
+  std::optional<std::size_t> last_end;
+};
+
+/**
+ * nullopt when a `try` or `with` around the loop can catch an exception raised
+ * mid-pass: the next pass may then never reach the definition.
+ */
+std::optional<std::vector<Level>> pass_levels(const Flow& flow, TSNode loop,
+                                              uint32_t start) {
+  const uint32_t loop_start = ts_node_start_byte(loop);
+  if (std::ranges::any_of(
+        flow.guards, [&](const Range& g) { return g.contains(loop_start); }))
+    return std::nullopt;
+  std::vector<TSNode> suite = statements(field(loop, "body"));
+  std::vector<Level> levels;
+  while (true) {
+    const std::optional<std::size_t> def_index = position(suite, start);
+    if (!def_index) return std::nullopt;
+    std::optional<std::size_t> last_end;
+    for (std::size_t i = *def_index; i > 0; --i) {
+      if (ends_pass(suite[i - 1])) {
+        last_end = i - 1;
+        break;
+      }
+    }
+    TSNode statement = suite[*def_index];
+    levels.push_back(
+      {.suite = suite, .def_index = *def_index, .last_end = last_end});
+    if (ts_node_start_byte(statement) == start) return levels;
+    std::optional<std::vector<TSNode>> next = shared_branch(statement, start);
+    if (!next) return std::nullopt;
+    suite = std::move(*next);
+  }
+}
+
+/**
+ * A `break` or `continue` between the binding and the definition can end a
+ * pass after the binding ran, so the binding becomes the name's final value.
+ */
+bool runs_in_order(TSNode loop, const std::vector<Level>& levels, uint32_t at) {
+  TSNode target = field(loop, "left");
+  const bool prior = type_of(loop) == "for_statement" &&
+                     !ts_node_is_null(target) && range_of(target).contains(at);
+  const std::size_t last = levels.size() - 1;
+  for (std::size_t depth = 0; depth < levels.size(); ++depth) {
+    const Level& level = levels[depth];
+    std::size_t from = 0;
+    if (!prior || depth != 0) {
+      const std::optional<std::size_t> index = position(level.suite, at);
+      if (!index) return false;
+      if (*index == level.def_index) {
+        if (depth == last) return true;
+        continue;
+      }
+      if (*index > level.def_index || depth != last) return false;
+      from = *index;
+    }
+    return depth == last && (!level.last_end || *level.last_end < from);
+  }
+  return false;
+}
+
+/** Ported from Complexipy 9.0.0 `recursion.rs` (`Binder`). */
+class Binder {
+ public:
+  /**
+   * A handler binding is excluded only when the definition ends the `try`
+   * body: a statement after it could raise and run the handler after the
+   * definition bound the name.
+   */
+  Binder(const Flow* flow, const Span& span) : flow_(flow), bound_(span.bound) {
+    if (!flow) return;
+    for (TSNode loop : flow->loops)
+      if (repeats(loop, span.start))
+        loops_.emplace_back(loop, pass_levels(*flow, loop, span.start));
+    for (const auto& branches : flow->branches)
+      if (auto own = branch_of(branches, span.start))
+        branches_.emplace_back(*own, &branches);
+    for (const auto& [body, handlers] : flow->handlers)
+      if (body.contains(span.start) && span.end == body.end)
+        handlers_.push_back(&handlers);
+  }
+
+  [[nodiscard]] bool binds_before(uint32_t at) const {
+    if (!flow_) return at <= bound_;
+    const Loop* innermost = nullptr;
+    for (const auto& loop : loops_) {
+      if (!repeats(loop.first, at)) continue;
+      if (!innermost || length(loop.first) < length(innermost->first))
+        innermost = &loop;
+    }
+    if (at > bound_ && !excludes(at)) return false;
+    return !innermost ||
+           (innermost->second &&
+            runs_in_order(innermost->first, *innermost->second, at));
+  }
+
+ private:
+  using Loop = std::pair<TSNode, std::optional<std::vector<Level>>>;
+
+  const Flow* flow_;
+  uint32_t bound_;
+  std::vector<Loop> loops_;
+  std::vector<std::pair<std::size_t, const std::vector<Range>*>> branches_;
+  std::vector<const std::vector<Range>*> handlers_;
+
+  static uint32_t length(TSNode n) {
+    return ts_node_end_byte(n) - ts_node_start_byte(n);
+  }
+
+  [[nodiscard]] bool excludes(uint32_t at) const {
+    for (const auto& [own, branches] : branches_) {
+      const std::optional<std::size_t> b = branch_of(*branches, at);
+      if (b && *b != own) return true;
+    }
+    for (const auto* handlers : handlers_)
+      for (const Range& h : *handlers)
+        if (h.contains(at)) return true;
+    return false;
+  }
+};
+
+Binder binder(const Scope& sc, const Span& span) {
+  const bool ordered =
+    sc.kind == ScopeKind::Module || sc.kind == ScopeKind::Function;
+  return {ordered ? &sc.flow : nullptr, span};
+}
+
 class Resolver {
  public:
   explicit Resolver(const string& src) : src_(src) {}
@@ -94,7 +360,8 @@ class Resolver {
           it->second.push_back({.kind = BindKind::Other,
                                 .pos = kUnordered,
                                 .id = kNone,
-                                .block = 0});
+                                .block = 0,
+                                .at = kUnordered});
           break;
         }
       }
@@ -131,20 +398,62 @@ class Resolver {
     return static_cast<int>(scopes_.size()) - 1;
   }
 
-  void bind(int scope, const string& name, BindKind kind, uint32_t pos,
-            uint32_t block, int id = kNone) {
+  void bind(int scope, TSNode node, BindKind kind, uint32_t pos, uint32_t block,
+            int id = kNone) {
+    const string name = text(node);
     Scope& sc = scopes_[scope];
     if (sc.globals.contains(name)) {
-      scopes_[kModule].names[name].push_back(
-        {.kind = BindKind::Other, .pos = kUnordered, .id = kNone, .block = 0});
+      scopes_[kModule].names[name].push_back({.kind = BindKind::Other,
+                                              .pos = kUnordered,
+                                              .id = kNone,
+                                              .block = 0,
+                                              .at = kUnordered});
       return;
     }
     if (sc.nonlocals.contains(name)) {
       pending_nonlocals_.emplace_back(scope, name);
       return;
     }
-    sc.names[name].push_back(
-      {.kind = kind, .pos = pos, .id = id, .block = block});
+    sc.names[name].push_back({.kind = kind,
+                              .pos = pos,
+                              .id = id,
+                              .block = block,
+                              .at = ts_node_start_byte(node)});
+  }
+
+  void record_flow(TSNode n, int scope) {
+    Scope& sc = scopes_[scope];
+    if (sc.kind != ScopeKind::Module && sc.kind != ScopeKind::Function) return;
+    Flow& flow = sc.flow;
+    string_view t = type_of(n);
+    if (t == "for_statement" || t == "while_statement") {
+      flow.loops.push_back(n);
+    } else if (t == "if_statement" || t == "match_statement") {
+      std::vector<Range> branches;
+      for (const Branch& b : branches_of(n)) {
+        if (!ts_node_is_null(b.clause))
+          branches.push_back(range_of(b.clause));
+        else if (auto body = suite_range(b.suite))
+          branches.push_back(*body);
+      }
+      flow.branches.push_back(std::move(branches));
+    } else if (t == "try_statement") {
+      const std::optional<Range> body = suite_range(field(n, "body"));
+      if (!body) return;
+      flow.guards.push_back(*body);
+      std::vector<Range> handlers;
+      uint32_t m = ts_node_named_child_count(n);
+      for (uint32_t i = 0; i < m; ++i) {
+        TSNode ch = ts_node_named_child(n, i);
+        if (type_of(ch) == "except_clause" ||
+            type_of(ch) == "except_group_clause")
+          handlers.push_back(range_of(ch));
+      }
+      flow.handlers.emplace_back(*body, std::move(handlers));
+    } else if (t == "with_statement") {
+      if (auto body = suite_range(field(n, "body")))
+        flow.guards.push_back(*body);
+    }
   }
 
   void bind_targets(TSNode target, int scope, uint32_t pos, uint32_t block,
@@ -156,7 +465,7 @@ class Resolver {
       if (ts_node_is_null(cur)) continue;
       string_view t = type_of(cur);
       if (t == "identifier") {
-        bind(scope, text(cur), kind, pos, block);
+        bind(scope, cur, kind, pos, block);
       } else if (t == "attribute" || t == "subscript") {
         walk(cur, scope, owner, block);
       } else {
@@ -176,7 +485,7 @@ class Resolver {
       string_view t = type_of(cur);
       if (t == "dotted_name") {
         if (ts_node_named_child_count(cur) == 1)
-          bind(scope, text(cur), BindKind::Other, pos, block);
+          bind(scope, cur, BindKind::Other, pos, block);
       } else if (t == "splat_pattern" || t == "as_pattern_target") {
         bind_targets(cur, scope, pos, block, BindKind::Other, owner);
       } else {
@@ -197,7 +506,7 @@ class Resolver {
              ts_node_named_child_count(p) > 0)
         p = ts_node_named_child(p, 0);
       if (!ts_node_is_null(p) && type_of(p) == "identifier")
-        bind(scope, text(p), BindKind::Other, pos, 0);
+        bind(scope, p, BindKind::Other, pos, 0);
     }
   }
 
@@ -241,7 +550,12 @@ class Resolver {
   void walk_def(TSNode def, TSNode decorated, int scope, int owner,
                 uint32_t block) {
     const int id = static_cast<int>(defs_.size());
-    defs_.push_back(Def{.start = ts_node_start_byte(def)});
+    const TSNode outer = ts_node_is_null(decorated) ? def : decorated;
+    defs_.push_back(Def{.start = ts_node_start_byte(def),
+                        .span = {.start = ts_node_start_byte(outer),
+                                 .end = ts_node_end_byte(outer),
+                                 .bound = bound_of(field(def, "body"),
+                                                   ts_node_end_byte(outer))}});
     int header = scope;
     TSNode tparams = field(def, "type_parameters");
     if (!ts_node_is_null(tparams)) {
@@ -259,8 +573,8 @@ class Resolver {
       if (c >= 0) classes_[c].methods[text(field(def, "name"))].push_back(id);
     }
     walk(field(def, "body"), body, id, block);
-    bind(scope, text(field(def, "name")), BindKind::Def, ts_node_end_byte(def),
-         block, id);
+    bind(scope, field(def, "name"), BindKind::Def, ts_node_end_byte(def), block,
+         id);
   }
 
   void walk_class(TSNode cls, TSNode outer_node, int scope, int owner,
@@ -274,12 +588,14 @@ class Resolver {
     walk(field(cls, "superclasses"), header, owner, block);
     const int body = new_scope(ScopeKind::Class, header);
     const int id = static_cast<int>(classes_.size());
-    classes_.push_back(ClassInfo{.start = ts_node_start_byte(outer_node),
-                                 .end = ts_node_end_byte(outer_node),
-                                 .body_scope = body});
+    classes_.push_back(ClassInfo{
+      .start = ts_node_start_byte(outer_node),
+      .end = ts_node_end_byte(outer_node),
+      .bound = bound_of(field(cls, "body"), ts_node_end_byte(outer_node)),
+      .body_scope = body});
     walk(field(cls, "body"), body, owner, block);
-    bind(scope, text(field(cls, "name")), BindKind::Class,
-         ts_node_end_byte(cls), block, id);
+    bind(scope, field(cls, "name"), BindKind::Class, ts_node_end_byte(cls),
+         block, id);
   }
 
   void push_comprehension(TSNode n, int scope, int owner, uint32_t block,
@@ -325,10 +641,9 @@ class Resolver {
       if (t == "wildcard_import") {
         scopes_[scope].star = true;
       } else if (t == "aliased_import") {
-        bind(scope, text(field(ch, "alias")), BindKind::Other, pos, block);
+        bind(scope, field(ch, "alias"), BindKind::Other, pos, block);
       } else if (t == "dotted_name" && ts_node_named_child_count(ch) > 0) {
-        bind(scope, text(ts_node_named_child(ch, 0)), BindKind::Other, pos,
-             block);
+        bind(scope, ts_node_named_child(ch, 0), BindKind::Other, pos, block);
       }
     }
   }
@@ -343,7 +658,7 @@ class Resolver {
         continue;
       }
       if (after_as && type_of(ch) == "identifier") {
-        bind(scope, text(ch), BindKind::Other, ts_node_end_byte(ch), block);
+        bind(scope, ch, BindKind::Other, ts_node_end_byte(ch), block);
         after_as = false;
         continue;
       }
@@ -368,6 +683,7 @@ class Resolver {
         push_comprehension(cur, cur_scope, owner, block, stack);
         continue;
       }
+      record_flow(cur, cur_scope);
       if (walk_special(cur, cur_scope, owner, block)) continue;
       if (type_of(cur) == "call" && owner != kNone)
         calls_.push_back({.owner = owner,
@@ -443,7 +759,7 @@ class Resolver {
              ts_node_named_child_count(name) > 0)
         name = ts_node_named_child(name, 0);
       if (!ts_node_is_null(name) && type_of(name) == "identifier")
-        bind(scope, text(name), BindKind::Other, ts_node_end_byte(n), block);
+        bind(scope, name, BindKind::Other, ts_node_end_byte(n), block);
     } else if (t == "case_clause") {
       uint32_t m = ts_node_named_child_count(n);
       for (uint32_t i = 0; i < m; ++i) {
@@ -506,22 +822,22 @@ class Resolver {
     const Scope& sc = scopes_[scope];
     auto it = sc.names.find(name);
     if (!sc.star && sc.kind != ScopeKind::TypeParams && it != sc.names.end()) {
-      uint32_t last_other = 0;
-      bool any_other = false;
       std::unordered_map<uint32_t, uint32_t> last_def_in_block;
       for (const auto& b : it->second) {
-        if (b.kind == BindKind::Def) {
-          auto& d = last_def_in_block[b.block];
-          d = std::max(d, b.pos);
-        } else if (b.kind != BindKind::Declaration) {
-          last_other = std::max(last_other, b.pos);
-          any_other = true;
-        }
+        if (b.kind != BindKind::Def) continue;
+        auto& d = last_def_in_block[b.block];
+        d = std::max(d, b.pos);
       }
-      for (const auto& b : it->second)
-        if (b.kind == BindKind::Def && (!any_other || b.pos > last_other) &&
-            b.pos == last_def_in_block[b.block])
+      for (const auto& b : it->second) {
+        if (b.kind != BindKind::Def || b.pos != last_def_in_block[b.block])
+          continue;
+        const Binder by = binder(sc, defs_[b.id].span);
+        if (std::ranges::all_of(it->second, [&](const Binding& o) {
+              return o.kind == BindKind::Def ||
+                     o.kind == BindKind::Declaration || by.binds_before(o.at);
+            }))
           out.push_back(b.id);
+      }
     }
     return defs_cache_.emplace(key, std::move(out)).first->second;
   }
@@ -538,9 +854,12 @@ class Resolver {
       cls = &b;
     }
     if (!cls) return kNone;
+    const ClassInfo& k = classes_[cls->id];
+    const Binder by =
+      binder(sc, {.start = k.start, .end = k.end, .bound = k.bound});
     for (const auto& b : it->second)
       if (b.kind != BindKind::Class && b.kind != BindKind::Declaration &&
-          b.pos > cls->pos)
+          !by.binds_before(b.at))
         return kNone;
     return cls->id;
   }

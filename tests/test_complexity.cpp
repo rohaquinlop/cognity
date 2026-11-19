@@ -1087,6 +1087,179 @@ f: int
     return f
 )py",
      1},
+    {R"py(for x in xs:
+    K = None
+    if c:
+        break
+    class K:
+        @staticmethod
+        def s(n):
+            return K.s(n - 1)
+)py",
+     0},
+    {R"py(while X:
+    if Y:
+        f = 1
+    else:
+        def f(n):
+            return f()
+)py",
+     0},
+    {R"py(for x in xs:
+    f = 1
+    if c:
+        break
+    def f(n):
+        return f()
+)py",
+     0},
+    {R"py(for x in xs:
+    f = 1
+    if c:
+        continue
+    def f(n):
+        return f()
+)py",
+     0},
+    {R"py(for x in xs:
+    f = 1
+    if c:
+        def f(n):
+            return f()
+)py",
+     0},
+    {R"py(try:
+    for x in xs:
+        f = 1
+        g()
+        def f(n):
+            return f()
+except E:
+    pass
+)py",
+     0},
+    {R"py(with m:
+    for x in xs:
+        f = 1
+        def f(n):
+            return f()
+)py",
+     0},
+    {R"py(for x in xs:
+    try:
+        f = 1
+        def f(n):
+            return f()
+    except E:
+        pass
+)py",
+     0},
+    {R"py(while (f := g()):
+    def f(n):
+        return f()
+)py",
+     0},
+    {R"py(if X:
+    def f(n):
+        return f()
+elif (f := Y):
+    pass
+else:
+    f = 1
+)py",
+     1},
+    {R"py(match x:
+    case 1:
+        def f(n):
+            return f()
+    case f:
+        pass
+)py",
+     1},
+    {R"py(try:
+    def f(n):
+        return f()
+except E:
+    f = 1
+)py",
+     1},
+    {R"py(for f in xs:
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(for f in xs:
+    if c:
+        break
+    def f(n):
+        return f()
+)py",
+     0},
+    {R"py(for x in xs:
+    f = 1
+    match x:
+        case 1:
+            def f(n):
+                return f()
+)py",
+     0},
+    {R"py(for x in xs:
+    match x:
+        case 1:
+            f = 1
+            def f(n):
+                return f()
+)py",
+     1},
+    {R"py(for x in xs:
+    f = 1
+    for y in ys:
+        break
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(try:
+    def f(n):
+        return f()
+    g()
+except E:
+    f = 1
+)py",
+     0},
+    {R"py(if X:
+    class K:
+        @staticmethod
+        def s(n):
+            return K.s(n - 1)
+else:
+    K = None
+)py",
+     1},
+    {R"py(for x in xs:
+    if a:
+        def f(n):
+            return f()
+    elif (f := b):
+        pass
+)py",
+     0},
+    {R"py(class C:
+    for x in xs:
+        f = 1
+        def f(self):
+            return f()
+)py",
+     0},
+    {R"py(def outer():
+    class C:
+        if a:
+            f = 1
+        else:
+            def f(self):
+                return f()
+)py",
+     2},
   };
 }
 
