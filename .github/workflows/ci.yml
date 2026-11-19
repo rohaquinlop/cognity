@@ -71,3 +71,26 @@ jobs:
         run: |
           ctest --test-dir "$env:BUILD_DIR" -C Release --output-on-failure
 
+
+  lint:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up CMake
+        uses: lukka/get-cmake@v3.31.0
+
+      - name: Format
+        run: scripts/check.sh format
+
+      - name: Lint (changed lines)
+        env:
+          CHECK_BASE: ${{ github.event.pull_request.base.sha }}
+        run: scripts/check.sh lint
