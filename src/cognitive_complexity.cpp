@@ -80,7 +80,7 @@ std::unique_ptr<IBuilder> make_builder(Language lang) {
       return std::make_unique<JavaScriptGSGBuilder>();
     case Language::C:
     case Language::Cpp:
-      return std::make_unique<CLikeGSGBuilder>();
+      return std::make_unique<CLikeGSGBuilder>(lang == Language::Cpp);
     default:
       return nullptr;
   }

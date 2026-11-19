@@ -1,9 +1,9 @@
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "../../include/builders/c_gsg_builder.h"
@@ -16,11 +16,21 @@ using std::string_view;
 
 constexpr uint32_t kVariadic = std::numeric_limits<uint32_t>::max();
 
+enum class Kind : uint8_t { Unknown, Integer, Floating, Char, Bool };
+
 struct Def {
   string name;
   string scope;
   uint32_t min_args{0};
   uint32_t max_args{0};
+  std::vector<Kind> params;
+};
+
+struct Local {
+  string name;
+  uint32_t from;
+  uint32_t start;
+  uint32_t end;
 };
 
 string_view type_of(TSNode n) { return ts_node_type(n); }
@@ -47,8 +57,49 @@ TSNode function_declarator(TSNode decl) {
   return found;
 }
 
-void arity(TSNode def, const string& src, uint32_t& min_args,
-           uint32_t& max_args) {
+string_view slice(const string& src, TSNode n) {
+  return string_view(src).substr(ts_node_start_byte(n),
+                                 ts_node_end_byte(n) - ts_node_start_byte(n));
+}
+
+Kind param_kind(TSNode p, const string& src) {
+  TSNode decl = field(p, "declarator");
+  if (!ts_node_is_null(decl) && type_of(decl) == "reference_declarator" &&
+      ts_node_named_child_count(decl) == 1)
+    decl = ts_node_named_child(decl, 0);
+  if (!ts_node_is_null(decl) && type_of(decl) != "identifier")
+    return Kind::Unknown;
+  TSNode type = field(p, "type");
+  if (ts_node_is_null(type)) return Kind::Unknown;
+  const string_view text = slice(src, type);
+  if (type_of(type) == "sized_type_specifier")
+    return text.find("double") != string_view::npos ? Kind::Floating
+                                                    : Kind::Integer;
+  if (type_of(type) != "primitive_type") return Kind::Unknown;
+  if (text == "int" || text == "short" || text == "long") return Kind::Integer;
+  if (text == "float" || text == "double") return Kind::Floating;
+  if (text == "char") return Kind::Char;
+  if (text == "bool") return Kind::Bool;
+  return Kind::Unknown;
+}
+
+Kind argument_kind(TSNode a, const string& src) {
+  string_view t = type_of(a);
+  if (t == "char_literal") return Kind::Char;
+  if (t == "true" || t == "false") return Kind::Bool;
+  if (t != "number_literal") return Kind::Unknown;
+  string_view text = slice(src, a);
+  if (text.starts_with('-') || text.starts_with('+')) text.remove_prefix(1);
+  if (text.starts_with("0x") || text.starts_with("0X"))
+    return text.find_first_of("pP") != string_view::npos ? Kind::Floating
+                                                         : Kind::Integer;
+  return text.find_first_of(".eE") != string_view::npos ? Kind::Floating
+                                                        : Kind::Integer;
+}
+
+void arity(TSNode def, const string& src, Def& d) {
+  uint32_t& min_args = d.min_args;
+  uint32_t& max_args = d.max_args;
   TSNode params =
     field(function_declarator(field(def, "declarator")), "parameters");
   uint32_t n = ts_node_is_null(params) ? 0 : ts_node_named_child_count(params);
@@ -59,6 +110,7 @@ void arity(TSNode def, const string& src, uint32_t& min_args,
       max_args = kVariadic;
     } else if (t == "optional_parameter_declaration") {
       ++max_args;
+      d.params.push_back(param_kind(p, src));
     } else if (t == "parameter_declaration") {
       TSNode type = field(p, "type");
       if (n == 1 && ts_node_is_null(field(p, "declarator")) &&
@@ -69,6 +121,7 @@ void arity(TSNode def, const string& src, uint32_t& min_args,
         continue;
       ++min_args;
       ++max_args;
+      d.params.push_back(param_kind(p, src));
     }
   }
   if (max_args != kVariadic && max_args < min_args) max_args = min_args;
@@ -96,14 +149,22 @@ bool declares_function(TSNode decl) {
   return last == "function_declarator";
 }
 
-void collect_locals(TSNode n, const string& src,
-                    std::unordered_set<string>& out) {
+bool is_region(string_view t) {
+  return t == "compound_statement" || t == "for_statement" ||
+         t == "for_range_loop" || t == "if_statement" ||
+         t == "while_statement" || t == "switch_statement" ||
+         t == "catch_clause" || t == "lambda_expression";
+}
+
+void collect_locals(TSNode n, TSNode region, const string& src,
+                    std::vector<Local>& out) {
   if (ts_node_is_null(n)) return;
-  std::vector<TSNode> stack{n};
+  std::vector<std::pair<TSNode, TSNode>> stack{{n, region}};
   while (!stack.empty()) {
-    TSNode cur = stack.back();
+    auto [cur, reg] = stack.back();
     stack.pop_back();
     string_view t = type_of(cur);
+    if (is_region(t)) reg = cur;
     if (t == "parameter_declaration" || t == "optional_parameter_declaration" ||
         t == "declaration") {
       uint32_t m = ts_node_child_count(cur);
@@ -113,27 +174,68 @@ void collect_locals(TSNode n, const string& src,
         TSNode decl = ts_node_child(cur, i);
         if (t == "declaration" && declares_function(decl)) continue;
         TSNode name = declared_name(decl);
-        if (!ts_node_is_null(name)) {
-          const uint32_t a = ts_node_start_byte(name);
-          out.insert(src.substr(a, ts_node_end_byte(name) - a));
-        }
+        if (!ts_node_is_null(name))
+          out.push_back({.name = string(slice(src, name)),
+                         .from = ts_node_end_byte(name),
+                         .start = ts_node_start_byte(reg),
+                         .end = ts_node_end_byte(reg)});
       }
     }
-    if (t == "lambda_expression") continue;
     uint32_t m = ts_node_named_child_count(cur);
     for (uint32_t i = 0; i < m; ++i)
-      stack.push_back(ts_node_named_child(cur, i));
+      stack.emplace_back(ts_node_named_child(cur, i), reg);
   }
 }
 
-uint32_t argument_count(TSNode call) {
+bool hidden(const std::vector<Local>& locals, const string& name, uint32_t at) {
+  return std::ranges::any_of(locals, [&](const Local& l) {
+    return l.name == name && l.start <= at && at < l.end && at >= l.from;
+  });
+}
+
+std::vector<Kind> argument_kinds(TSNode call, const string& src) {
+  std::vector<Kind> kinds;
   TSNode args = field(call, "arguments");
-  if (ts_node_is_null(args)) return 0;
-  uint32_t count = 0;
+  if (ts_node_is_null(args)) return kinds;
   uint32_t n = ts_node_named_child_count(args);
-  for (uint32_t i = 0; i < n; ++i)
-    if (!ts_node_is_extra(ts_node_named_child(args, i))) ++count;
-  return count;
+  for (uint32_t i = 0; i < n; ++i) {
+    TSNode a = ts_node_named_child(args, i);
+    if (!ts_node_is_extra(a)) kinds.push_back(argument_kind(a, src));
+  }
+  return kinds;
+}
+
+/**
+ * Narrows C++ overloads by literal argument kinds. A candidate is dropped
+ * only for a known parameter kind that differs from the argument, and only
+ * when another candidate matches exactly: an Unknown parameter (template,
+ * typedef, class type) may still be the real callee.
+ */
+void narrow_by_kinds(const std::vector<Def>& defs,
+                     const std::vector<Kind>& kinds,
+                     std::vector<std::size_t>& out) {
+  if (out.size() < 2 ||
+      std::ranges::any_of(kinds, [](Kind k) { return k == Kind::Unknown; }))
+    return;
+  std::vector<bool> mismatch(out.size(), false);
+  bool exact = false;
+  for (std::size_t c = 0; c < out.size(); ++c) {
+    const std::vector<Kind>& params = defs[out[c]].params;
+    bool match = false;
+    for (std::size_t i = 0; i < kinds.size() && i < params.size(); ++i) {
+      if (params[i] == Kind::Unknown) continue;
+      if (params[i] == kinds[i])
+        match = true;
+      else
+        mismatch[c] = true;
+    }
+    exact = exact || (match && !mismatch[c]);
+  }
+  if (!exact) return;
+  std::vector<std::size_t> kept;
+  for (std::size_t c = 0; c < out.size(); ++c)
+    if (!mismatch[c]) kept.push_back(out[c]);
+  out = std::move(kept);
 }
 
 }  // namespace
@@ -157,8 +259,10 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
     const uint32_t a = ts_node_start_byte(n);
     return src.substr(a, ts_node_end_byte(n) - a);
   };
-  auto resolve = [&](const string& scope, const string& name,
-                     uint32_t args) -> std::vector<std::size_t> {
+  auto resolve = [&](
+                   const string& scope, const string& name,
+                   const std::vector<Kind>& kinds) -> std::vector<std::size_t> {
+    const auto args = static_cast<uint32_t>(kinds.size());
     string prefix = scope;
     while (true) {
       string key = prefix;
@@ -171,6 +275,7 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
           if (args >= defs[id].min_args &&
               (defs[id].max_args == kVariadic || args <= defs[id].max_args))
             out.push_back(id);
+        if (cpp_) narrow_by_kinds(defs, kinds, out);
         return out;
       }
       if (prefix.empty()) return {};
@@ -179,7 +284,7 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
   };
 
   std::vector<std::vector<CallEdge>> edges(funcs.size());
-  std::vector<std::unordered_set<string>> locals(funcs.size());
+  std::vector<std::vector<Local>> locals(funcs.size());
   for (const bool calls : {false, true}) {
     std::vector<std::pair<TSNode, std::size_t>> stack{{root, funcs.size()}};
     while (!stack.empty()) {
@@ -191,11 +296,11 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
         if (it != by_start.end()) {
           owner = it->second;
           if (!calls) {
-            arity(n, src, defs[owner].min_args, defs[owner].max_args);
+            arity(n, src, defs[owner]);
             collect_locals(
               field(function_declarator(field(n, "declarator")), "parameters"),
-              src, locals[owner]);
-            collect_locals(field(n, "body"), src, locals[owner]);
+              n, src, locals[owner]);
+            collect_locals(field(n, "body"), n, src, locals[owner]);
           }
         }
       } else if (calls && t == "call_expression" && owner < funcs.size()) {
@@ -203,14 +308,15 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
         string_view ft = type_of(fn);
         string name;
         if (ft == "qualified_identifier" ||
-            (ft == "identifier" && !locals[owner].contains(text(fn))))
+            (ft == "identifier" &&
+             !hidden(locals[owner], text(fn), ts_node_start_byte(n))))
           name = text(fn);
         else if (ft == "field_expression" &&
                  type_of(field(fn, "argument")) == "this")
           name = text(field(fn, "field"));
         if (!name.empty())
           for (std::size_t callee :
-               resolve(defs[owner].scope, name, argument_count(n)))
+               resolve(defs[owner].scope, name, argument_kinds(n, src)))
             edges[owner].push_back({.callee = callee, .call = loc(n)});
       }
       uint32_t m = ts_node_named_child_count(n);
