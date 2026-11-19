@@ -176,6 +176,27 @@ void collect_locals(TSNode n, TSNode region, const string& src,
         (t == "abstract_function_declarator" &&
          type_of(ts_node_parent(cur)) != "lambda_expression"))
       continue;
+    if (t == "for_range_loop") {
+      TSNode decl = field(cur, "declarator");
+      while (!ts_node_is_null(decl) && type_of(decl) != "identifier" &&
+             type_of(decl) != "structured_binding_declarator") {
+        TSNode inner = field(decl, "declarator");
+        if (ts_node_is_null(inner) && ts_node_named_child_count(decl) > 0)
+          inner = ts_node_named_child(decl, 0);
+        decl = inner;
+      }
+      const bool binding = !ts_node_is_null(decl) &&
+                           type_of(decl) == "structured_binding_declarator";
+      const uint32_t k = binding ? ts_node_named_child_count(decl) : 1;
+      for (uint32_t i = 0; i < k && !ts_node_is_null(decl); ++i) {
+        TSNode name = binding ? ts_node_named_child(decl, i) : decl;
+        if (type_of(name) != "identifier") continue;
+        out.push_back({.name = string(slice(src, name)),
+                       .from = ts_node_start_byte(field(cur, "body")),
+                       .start = ts_node_start_byte(cur),
+                       .end = ts_node_end_byte(cur)});
+      }
+    }
     if (t == "parameter_declaration" || t == "optional_parameter_declaration" ||
         t == "declaration") {
       uint32_t m = ts_node_child_count(cur);
