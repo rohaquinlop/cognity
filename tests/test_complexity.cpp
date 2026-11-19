@@ -1263,6 +1263,117 @@ else:
   };
 }
 
+static std::vector<std::tuple<std::string, Language, unsigned int>>
+c_recursion_cases() {
+  return {
+    {R"src(int f(int n) {
+  {
+    int f = 1;
+  }
+  return f(n - 1);
+}
+)src",
+     Language::C, 1},
+    {R"src(int f(int n) {
+  int r = f(n - 1);
+  int f = 0;
+  return r + f;
+}
+)src",
+     Language::C, 1},
+    {R"src(int f(int n) {
+  int f = 0;
+  {
+    return f(n);
+  }
+}
+)src",
+     Language::C, 0},
+    {R"src(int f(int n) {
+  for (int f = 0; f < n; f++) {
+    f(1);
+  }
+  return 0;
+}
+)src",
+     Language::C, 1},
+    {R"src(int f(int n) {
+  for (int f = 0; f < n; f++) {
+  }
+  return f(n - 1);
+}
+)src",
+     Language::C, 2},
+    {R"src(int f(int n) {
+  int f = f(1);
+  return f;
+}
+)src",
+     Language::C, 0},
+    {R"src(#ifdef X
+int f(int n) { return n; }
+#else
+int f(double x) { return f(1); }
+#endif
+)src",
+     Language::C, 1},
+    {R"src(int f(int f) { return f(1); }
+)src",
+     Language::C, 0},
+    {R"src(int f(int n) {
+  auto g = [](auto f) { return f(1); };
+  return g(n);
+}
+)src",
+     Language::Cpp, 0},
+    {R"src(int f(int n) {
+  auto g = []() { int f = 0; return f; };
+  return f(n - 1) + g();
+}
+)src",
+     Language::Cpp, 1},
+    {R"src(int f(int n) {
+  if (int f = n) {
+    return f;
+  } else {
+    return f(1);
+  }
+}
+)src",
+     Language::Cpp, 2},
+    {R"src(int f(int n) { return n; }
+int f(double x) { return f(1); }
+)src",
+     Language::Cpp, 0},
+    {R"src(int f(int n) { return n; }
+int f(double x) { return f(1.0); }
+)src",
+     Language::Cpp, 1},
+    {R"src(int f(int n) { return n; }
+int f(double x) { return f(-1); }
+)src",
+     Language::Cpp, 0},
+    {R"src(int f(int a, double b) { return a; }
+int f(double a, int b) {
+  int x = 0;
+  return f(1, x);
+}
+)src",
+     Language::Cpp, 1},
+    {R"src(long f(long n) { return n; }
+template <class T>
+T f(T x) {
+  return f(1);
+}
+)src",
+     Language::Cpp, 1},
+    {R"src(int f(int g(int)) { return 0; }
+int f(double x) { return f(1); }
+)src",
+     Language::Cpp, 1},
+  };
+}
+
 int main() {
   // Expected totals per file (mirrors complexipy tests). Paths are relative to
   // repository root.
@@ -1459,15 +1570,20 @@ int main() {
     }
   }
 
-  for (const auto& [code, exp] : recursion_cases()) {
-    unsigned int got = total(analyze_source(code, Language::Python));
+  auto check_recursion = [&](const std::string& code, Language lang,
+                             unsigned int exp) {
+    unsigned int got = total(analyze_source(code, lang));
     if (got != exp) {
       std::cerr << "Recursion case mismatch: expected " << exp << ", got "
                 << got << "\n"
                 << code << "\n";
       ok = false;
     }
-  }
+  };
+  for (const auto& [code, exp] : recursion_cases())
+    check_recursion(code, Language::Python, exp);
+  for (const auto& [code, lang, exp] : c_recursion_cases())
+    check_recursion(code, lang, exp);
 
   {
     const std::size_t depth = 50000;
