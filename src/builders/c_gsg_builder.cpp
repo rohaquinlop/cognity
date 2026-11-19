@@ -210,6 +210,7 @@ void CLikeGSGBuilder::build_switch(TSNode s, const string& src,
   GSGNode sw;
   sw.kind = GSGNodeKind::Switch;
   sw.loc = loc(s);
+  push_header(sw, ts_node_child_by_field_name(s, "condition", 9), src);
   TSNode body = ts_node_child_by_field_name(s, "body", 4);
   uint32_t cn = ts_node_is_null(body) ? 0 : ts_node_named_child_count(body);
   for (uint32_t j = 0; j < cn; ++j) {
@@ -279,16 +280,12 @@ void CLikeGSGBuilder::build_block_children(TSNode n, const string& src,
       build_try(s, src, out);
     else if (ty == "compound_statement")
       build_block_children(s, src, out);
-    else if (ty == "return_statement") {
-      TSNode arg = ts_node_child_by_field_name(s, "argument", 8);
-      if (!ts_node_is_null(arg)) push_expr(out, s, arg, src);
-    } else if (ty == "expression_statement") {
-      if (ts_node_named_child_count(s) > 0) {
-        TSNode expr = ts_node_named_child(s, 0);
-        push_expr(out, expr, expr, src);
-      }
-    } else if (ty == "declaration") {
+    else if (ty == "return_statement" || ty == "throw_statement" ||
+             ty == "declaration")
       push_expr(out, s, s, src);
+    else if (ty == "expression_statement" && ts_node_named_child_count(s) > 0) {
+      TSNode expr = ts_node_named_child(s, 0);
+      push_expr(out, expr, expr, src);
     }
   }
 }
@@ -338,6 +335,8 @@ GSGNode CLikeGSGBuilder::build_for(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::For;
   g.loc = loc(n);
+  for (string_view f : {"initializer", "condition", "update"})
+    push_header(g, ts_node_child_by_field_name(n, f.data(), f.size()), src);
   build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
                        g.children);
   return g;
@@ -353,73 +352,71 @@ GSGNode CLikeGSGBuilder::build_do_while(TSNode n, const string& src) {
   return g;
 }
 
-static inline bool has_logical_token(const string& s) {
-  return s.find("&&") != string::npos || s.find("||") != string::npos ||
-         s.find('!') != string::npos;
-}
-
-static inline string_view sv_slice(const string& src, TSNode n) {
-  const uint32_t a = ts_node_start_byte(n);
-  const uint32_t b = ts_node_end_byte(n);
-  return string_view(src).substr(a, b - a);
-}
-
-static unsigned int c_count_bool_alternations(TSNode n, const string& src) {
-  string ty = t(n);
-  unsigned int c = 0;
-  if (ty == "binary_expression") {
-    TSNode left = ts_node_child_by_field_name(n, "left", 4);
-    TSNode right = ts_node_child_by_field_name(n, "right", 5);
-    auto s = sv_slice(src, n);
-    int curr = (s.find("&&") != string::npos)
-                 ? 0
-                 : ((s.find("||") != string::npos) ? 1 : -1);
-    auto sl = sv_slice(src, left);
-    auto sr = sv_slice(src, right);
-    int lb = (sl.find("&&") != string::npos)
-               ? 0
-               : ((sl.find("||") != string::npos) ? 1 : -1);
-    int rb = (sr.find("&&") != string::npos)
-               ? 0
-               : ((sr.find("||") != string::npos) ? 1 : -1);
-    if (lb != -1 && curr != lb) c++;
-    if (rb != -1 && curr != rb) c++;
-    c += c_count_bool_alternations(left, src);
-    c += c_count_bool_alternations(right, src);
+static TSNode c_unwrap_parens(TSNode n) {
+  while (!ts_node_is_null(n) && t(n) == "parenthesized_expression") {
+    TSNode only{};
+    uint32_t count = 0;
+    uint32_t m = ts_node_named_child_count(n);
+    for (uint32_t i = 0; i < m; ++i) {
+      TSNode ch = ts_node_named_child(n, i);
+      if (ts_node_is_extra(ch)) continue;
+      only = ch;
+      ++count;
+    }
+    if (count != 1) break;
+    n = only;
   }
-  return c;
+  return n;
+}
+
+static string_view c_bool_op(TSNode n) {
+  if (ts_node_is_null(n) || t(n) != "binary_expression") return {};
+  string_view op{ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
+  if (op == "&&" || op == "and") return "&&";
+  if (op == "||" || op == "or") return "||";
+  return {};
+}
+
+void CLikeGSGBuilder::collect_bool_chain(TSNode n, const string& src,
+                                         GSGNode& into, string_view& previous) {
+  for (const char* side : {"left", "right"}) {
+    if (side[0] == 'r') {
+      string_view op = c_bool_op(n);
+      if (op != previous) into.addl_cost += 1;
+      previous = op;
+    }
+    TSNode operand =
+      ts_node_child_by_field_name(n, side, side[0] == 'l' ? 4 : 5);
+    TSNode inner = c_unwrap_parens(operand);
+    if (!c_bool_op(inner).empty())
+      collect_bool_chain(inner, src, into, previous);
+    else
+      collect_expr(operand, src, into);
+  }
 }
 
 void CLikeGSGBuilder::collect_expr(TSNode n, const string& src, GSGNode& into) {
   if (ts_node_is_null(n)) return;
   string ty = t(n);
   if (ty == "lambda_expression") return;
-  if (ty == "binary_expression") {
-    auto s = sv_slice(src, n);
-    into.addl_cost += (has_logical_token(string(s)) ? 1 : 0) +
-                      c_count_bool_alternations(n, src);
-    collect_expr(ts_node_child_by_field_name(n, "left", 4), src, into);
-    collect_expr(ts_node_child_by_field_name(n, "right", 5), src, into);
+  if (!c_bool_op(n).empty()) {
+    string_view previous;
+    collect_bool_chain(n, src, into, previous);
     return;
   }
-  if (ty == "unary_expression") {
-    auto s = sv_slice(src, n);
-    if (!s.empty() && s.front() == '!') {
-      into.addl_cost += 1;
-      return;
-    }
-  }
-  GSGNode* target = &into;
-  GSGNode tern;
   if (ty == "conditional_expression") {
+    GSGNode tern;
     tern.kind = GSGNodeKind::Ternary;
     tern.loc = loc(n);
-    target = &tern;
+    push_header(tern, ts_node_child_by_field_name(n, "condition", 9), src);
+    collect_expr(ts_node_child_by_field_name(n, "consequence", 11), src, tern);
+    collect_expr(ts_node_child_by_field_name(n, "alternative", 11), src, tern);
+    into.children.emplace_back(std::move(tern));
+    return;
   }
   int m = ts_node_named_child_count(n);
   for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(n, i), src, *target);
-  if (target == &tern) into.children.emplace_back(std::move(tern));
+    collect_expr(ts_node_named_child(n, i), src, into);
 }
 
 void CLikeGSGBuilder::collect_lambdas_in_node(TSNode n, const string& src,

@@ -32,98 +32,104 @@ string_view JavaScriptGSGBuilder::name_of(TSNode n, const string& src) {
   return string_view{};
 }
 
-enum class JSBoolOp { And, Or, Not, Unknown };
-
-static string_view js_slice(const string& src, TSNode n) {
-  const uint32_t a = ts_node_start_byte(n);
-  const uint32_t b = ts_node_end_byte(n);
-  return string_view(src).substr(a, b - a);
-}
-
-static JSBoolOp js_op_from_text(string_view s) {
-  if (s == "&&") return JSBoolOp::And;
-  if (s == "||") return JSBoolOp::Or;
-  if (s == "!") return JSBoolOp::Not;
-  return JSBoolOp::Unknown;
-}
-
 static TSNode js_unwrap_parens(TSNode n) {
-  while (!ts_node_is_null(n) &&
-         string_view{ts_node_type(n)} == "parenthesized_expression") {
-    TSNode inner = ts_node_child_by_field_name(n, "expression", 10);
-    if (ts_node_is_null(inner)) break;
-    n = inner;
+  while (!ts_node_is_null(n) && t(n) == "parenthesized_expression") {
+    TSNode only{};
+    uint32_t count = 0;
+    uint32_t m = ts_node_named_child_count(n);
+    for (uint32_t i = 0; i < m; ++i) {
+      TSNode ch = ts_node_named_child(n, i);
+      if (ts_node_is_extra(ch)) continue;
+      only = ch;
+      ++count;
+    }
+    if (count != 1) break;
+    n = only;
   }
   return n;
 }
 
-static JSBoolOp js_get_bool_op(TSNode n, const string& src) {
-  n = js_unwrap_parens(n);
-  string ty = t(n);
-  if (ty == "binary_expression") {
-    auto s = js_slice(src, n);
-    if (s.find("&&") != string::npos) return JSBoolOp::And;
-    if (s.find("||") != string::npos) return JSBoolOp::Or;
-  } else if (ty == "unary_expression") {
-    auto s = js_slice(src, n);
-    if (!s.empty() && s[0] == '!') return JSBoolOp::Not;
-  }
-  return JSBoolOp::Unknown;
+static bool js_is_bool(TSNode n) {
+  if (ts_node_is_null(n) || t(n) != "binary_expression") return false;
+  string_view op{ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
+  return op == "&&" || op == "||";
 }
 
-static unsigned int js_count_bool_alternations(TSNode n, const string& src) {
-  n = js_unwrap_parens(n);
-  string ty = t(n);
-  unsigned int c = 0;
-  if (ty == "binary_expression") {
-    TSNode left = ts_node_child_by_field_name(n, "left", 4);
-    TSNode right = ts_node_child_by_field_name(n, "right", 5);
-    JSBoolOp curr = js_get_bool_op(n, src);
-    JSBoolOp lb = js_get_bool_op(left, src);
-    JSBoolOp rb = js_get_bool_op(right, src);
-    if (lb != JSBoolOp::Unknown && curr != lb) c++;
-    if (rb != JSBoolOp::Unknown && curr != rb) c++;
-    c += js_count_bool_alternations(left, src);
-    c += js_count_bool_alternations(right, src);
+void JavaScriptGSGBuilder::collect_bool_chain(TSNode n, const string& src,
+                                              GSGNode& into,
+                                              string_view& previous) {
+  for (const char* side : {"left", "right"}) {
+    if (side[0] == 'r') {
+      string_view op{
+        ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
+      if (op != previous) into.addl_cost += 1;
+      previous = op;
+    }
+    TSNode operand =
+      ts_node_child_by_field_name(n, side, side[0] == 'l' ? 4 : 5);
+    TSNode inner = js_unwrap_parens(operand);
+    if (js_is_bool(inner))
+      collect_bool_chain(inner, src, into, previous);
+    else
+      collect_expr(operand, src, into);
   }
-  return c;
 }
 
-static bool js_has_logical_op(TSNode n, const string& src) {
-  auto s = js_slice(src, n);
-  return s.find("&&") != string::npos || s.find("||") != string::npos ||
-         s.find("!") != string::npos;
+void JavaScriptGSGBuilder::collect_defaults(TSNode params, const string& src,
+                                            GSGNode& into) {
+  uint32_t m = ts_node_is_null(params) ? 0 : ts_node_named_child_count(params);
+  for (uint32_t i = 0; i < m; ++i) {
+    TSNode p = ts_node_named_child(params, i);
+    string pt = t(p);
+    if (pt == "assignment_pattern")
+      collect_expr(ts_node_child_by_field_name(p, "right", 5), src, into);
+    else if (pt == "required_parameter" || pt == "optional_parameter")
+      collect_expr(ts_node_child_by_field_name(p, "value", 5), src, into);
+  }
 }
 
 void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
                                         GSGNode& into) {
   if (ts_node_is_null(n)) return;
   string ty = t(n);
-  if (ty == "binary_expression") {
-    into.addl_cost +=
-      (js_has_logical_op(n, src) ? 1 : 0) + js_count_bool_alternations(n, src);
-    collect_expr(ts_node_child_by_field_name(n, "left", 4), src, into);
-    collect_expr(ts_node_child_by_field_name(n, "right", 5), src, into);
+  if (js_is_bool(n)) {
+    string_view previous;
+    collect_bool_chain(n, src, into, previous);
     return;
   }
-  if (ty == "unary_expression") {
-    auto s = js_slice(src, n);
-    if (!s.empty() && s[0] == '!') {
-      into.addl_cost += 1;
-      return;
-    }
+  if (ty == "arrow_function" || ty == "function_expression" ||
+      ty == "generator_function") {
+    GSGNode fn;
+    fn.kind = GSGNodeKind::Function;
+    fn.loc = loc(n);
+    GSGNode defaults;
+    defaults.kind = GSGNodeKind::Header;
+    defaults.loc = loc(n);
+    collect_defaults(ts_node_child_by_field_name(n, "parameters", 10), src,
+                     defaults);
+    if (defaults.addl_cost || !defaults.children.empty())
+      fn.children.emplace_back(std::move(defaults));
+    TSNode body = ts_node_child_by_field_name(n, "body", 4);
+    if (!ts_node_is_null(body) && t(body) == "statement_block")
+      build_block_children(body, src, fn.children);
+    else
+      collect_expr(body, src, fn);
+    into.children.emplace_back(std::move(fn));
+    return;
   }
-  GSGNode* target = &into;
-  GSGNode tern;
   if (ty == "ternary_expression") {
+    GSGNode tern;
     tern.kind = GSGNodeKind::Ternary;
     tern.loc = loc(n);
-    target = &tern;
+    push_header(tern, ts_node_child_by_field_name(n, "condition", 9), src);
+    collect_expr(ts_node_child_by_field_name(n, "consequence", 11), src, tern);
+    collect_expr(ts_node_child_by_field_name(n, "alternative", 11), src, tern);
+    into.children.emplace_back(std::move(tern));
+    return;
   }
   int m = ts_node_named_child_count(n);
   for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(n, i), src, *target);
-  if (target == &tern) into.children.emplace_back(std::move(tern));
+    collect_expr(ts_node_named_child(n, i), src, into);
 }
 
 void JavaScriptGSGBuilder::push_expr(std::vector<GSGNode>& out, TSNode loc_node,
@@ -184,6 +190,7 @@ void JavaScriptGSGBuilder::build_switch(TSNode n, const string& src,
   GSGNode sw;
   sw.kind = GSGNodeKind::Switch;
   sw.loc = loc(n);
+  push_header(sw, ts_node_child_by_field_name(n, "value", 5), src);
   TSNode body = ts_node_child_by_field_name(n, "body", 4);
   uint32_t kmax = ts_node_is_null(body) ? 0 : ts_node_named_child_count(body);
   for (uint32_t k = 0; k < kmax; ++k) {
@@ -238,7 +245,7 @@ void JavaScriptGSGBuilder::build_block_children(TSNode n, const string& src,
       build_if(s, src, out);
     else if (ty == "while_statement")
       out.emplace_back(build_while(s, src));
-    else if (ty == "for_statement")
+    else if (ty == "for_statement" || ty == "for_in_statement")
       out.emplace_back(build_for(s, src));
     else if (ty == "do_statement")
       out.emplace_back(build_do_while(s, src));
@@ -313,6 +320,9 @@ GSGNode JavaScriptGSGBuilder::build_for(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::For;
   g.loc = loc(n);
+  for (string_view f :
+       {"initializer", "condition", "increment", "left", "right"})
+    push_header(g, ts_node_child_by_field_name(n, f.data(), f.size()), src);
   build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
                        g.children);
   return g;
@@ -322,9 +332,7 @@ GSGNode JavaScriptGSGBuilder::build_do_while(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::DoWhile;
   g.loc = loc(n);
-  TSNode cond = ts_node_child_by_field_name(n, "condition", 9);
-  if (!ts_node_is_null(cond))
-    g.addl_cost += js_count_bool_alternations(cond, src);
+  push_header(g, ts_node_child_by_field_name(n, "condition", 9), src);
   build_block_children(ts_node_child_by_field_name(n, "body", 4), src,
                        g.children);
   return g;
