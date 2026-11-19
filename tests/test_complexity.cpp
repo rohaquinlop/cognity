@@ -102,6 +102,12 @@ int main() {
     {"tests/src/python/test_except_match_nesting.py", 6},
     {"tests/src/python/test_ternary_nesting.py", 3},
     {"tests/src/python/test_ternary_branches.py", 6},
+    {"tests/src/python/test_ternary_comment.py", 2},
+    {"tests/src/python/test_return_value.py", 11},
+    {"tests/src/python/test_bool_sequences.py", 22},
+    {"tests/src/python/test_lambda_nesting.py", 8},
+    {"tests/src/python/test_expr_sites.py", 17},
+    {"tests/src/python/test_case_guard.py", 6},
   };
 
   bool ok = true;

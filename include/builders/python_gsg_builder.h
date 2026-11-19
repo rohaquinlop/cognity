@@ -12,8 +12,8 @@ class PythonGSGBuilder : public IBuilder {
   GSGNode build_function(TSNode node, const std::string& source);
   void build_block_children(TSNode block, const std::string& source,
                             std::vector<GSGNode>& out);
-  void build_simple_statement(TSNode stmt, const std::string& source,
-                              std::vector<GSGNode>& out);
+  void build_expression_statement(TSNode stmt, const std::string& source,
+                                  std::vector<GSGNode>& out);
   void build_loop(TSNode node, const std::string& source,
                   std::vector<GSGNode>& out);
   void build_if(TSNode node, const std::string& source,
@@ -31,8 +31,12 @@ class PythonGSGBuilder : public IBuilder {
                                          const std::string& source);
   static TSNode clause_body(TSNode clause);
   static GSGNode expr_node(GSGNodeKind kind, TSNode loc_node);
-  static unsigned int count_bool_operators(TSNode node,
-                                           const std::string& source);
+  static void collect_bool_chain(TSNode node, const std::string& source,
+                                 GSGNode& into, std::string& previous);
+  static void collect_assignment(TSNode node, const std::string& source,
+                                 GSGNode& into);
+  static void push_defaults(GSGNode& fn, TSNode parameters,
+                            const std::string& source);
   static void collect_expr(TSNode node, const std::string& source,
                            GSGNode& into);
   static void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,
