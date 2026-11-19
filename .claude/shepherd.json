@@ -1,0 +1,8 @@
+{
+  "target_branch": "main",
+  "verify": [
+    "scripts/check.sh format",
+    "scripts/check.sh test",
+    "scripts/check.sh lint"
+  ]
+}

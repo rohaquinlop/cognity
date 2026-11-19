@@ -10,31 +10,32 @@ namespace cli_helpers {
 
 inline void print_usage() {
   std::cout
-      << "Usage: cognity <paths...> [options]\n"
-         "\n"
-         "Options:\n"
-         "  -mx, --max-complexity <int>   Max allowed complexity (default 15)\n"
-         "  -q,  --quiet                  Quiet mode (no output; exit code only)\n"
-         "  -i,  --ignore-complexity      Ignore max complexity threshold\n"
-         "  -d,  --detail <low|normal>    Detail level (default normal)\n"
-         "  -s,  --sort <asc|desc|name>   Sort order (default name)\n"
-         "  -csv, --output-csv            Output CSV\n"
-         "  -json, --output-json          Output JSON\n"
-         "  -l,  --lang <list>            Comma-separated languages filter "
-         "(e.g. py,js)\n"
-         "  -x,  --exclude <list>         Comma-separated files/dirs to "
-         "exclude\n"
-         "  -fw, --max-fn-width <int>     Truncate function names to width "
-         "when printing\n"
-         "  -h,  --help                   Show this help and exit\n"
-         "       --version                Show version and exit\n"
-         "\n"
-         "Note: place options after paths; directories are scanned "
-         "recursively.\n"
-         "\n"
-         "Also supports a cognity.toml file in the working directory\n"
-         "to provide default values for the same options. CLI options\n"
-         "override the config file.\n";
+    << "Usage: cognity <paths...> [options]\n"
+       "\n"
+       "Options:\n"
+       "  -mx, --max-complexity <int>   Max allowed complexity (default 15)\n"
+       "  -q,  --quiet                  Quiet mode (no output; exit code "
+       "only)\n"
+       "  -i,  --ignore-complexity      Ignore max complexity threshold\n"
+       "  -d,  --detail <low|normal>    Detail level (default normal)\n"
+       "  -s,  --sort <asc|desc|name>   Sort order (default name)\n"
+       "  -csv, --output-csv            Output CSV\n"
+       "  -json, --output-json          Output JSON\n"
+       "  -l,  --lang <list>            Comma-separated languages filter "
+       "(e.g. py,js)\n"
+       "  -x,  --exclude <list>         Comma-separated files/dirs to "
+       "exclude\n"
+       "  -fw, --max-fn-width <int>     Truncate function names to width "
+       "when printing\n"
+       "  -h,  --help                   Show this help and exit\n"
+       "       --version                Show version and exit\n"
+       "\n"
+       "Note: place options after paths; directories are scanned "
+       "recursively.\n"
+       "\n"
+       "Also supports a cognity.toml file in the working directory\n"
+       "to provide default values for the same options. CLI options\n"
+       "override the config file.\n";
 }
 
 inline void print_version() {
@@ -45,15 +46,15 @@ inline void print_version() {
 #endif
 }
 
-inline void print_error(const std::string &message) {
+inline void print_error(const std::string& message) {
   term::Painter p;
   p.init(false, false);
   p.print(std::cerr, term::Style::red, std::string("Error: ") + message, true);
   std::cerr << '\n';
 }
 
-inline CLI_ARGUMENTS merge_cli_and_config(const LoadedConfig &file_cfg,
-                                          const CLI_PARSE_RESULT &parsed) {
+inline CLI_ARGUMENTS merge_cli_and_config(const LoadedConfig& file_cfg,
+                                          const CLI_PARSE_RESULT& parsed) {
   CLI_ARGUMENTS cli_args;  // start with defaults
   if (file_cfg.loaded) {
     if (file_cfg.present.max_complexity)

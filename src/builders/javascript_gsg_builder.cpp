@@ -14,13 +14,13 @@ SourceLoc JavaScriptGSGBuilder::loc(TSNode n) {
   return SourceLoc{p.row, p.column, q.column};
 }
 
-string_view JavaScriptGSGBuilder::slice(const string &src, TSNode n) {
+string_view JavaScriptGSGBuilder::slice(const string& src, TSNode n) {
   const uint32_t a = ts_node_start_byte(n);
   const uint32_t b = ts_node_end_byte(n);
   return string_view(src).substr(a, b - a);
 }
 
-string_view JavaScriptGSGBuilder::name_of(TSNode n, const string &src) {
+string_view JavaScriptGSGBuilder::name_of(TSNode n, const string& src) {
   TSNode name = ts_node_child_by_field_name(n, "name", 4);
   if (!ts_node_is_null(name)) return slice(src, name);
   int m = ts_node_named_child_count(n);
@@ -34,7 +34,7 @@ string_view JavaScriptGSGBuilder::name_of(TSNode n, const string &src) {
 
 enum class JSBoolOp { And, Or, Not, Unknown };
 
-static string_view js_slice(const string &src, TSNode n) {
+static string_view js_slice(const string& src, TSNode n) {
   const uint32_t a = ts_node_start_byte(n);
   const uint32_t b = ts_node_end_byte(n);
   return string_view(src).substr(a, b - a);
@@ -57,7 +57,7 @@ static TSNode js_unwrap_parens(TSNode n) {
   return n;
 }
 
-static JSBoolOp js_get_bool_op(TSNode n, const string &src) {
+static JSBoolOp js_get_bool_op(TSNode n, const string& src) {
   n = js_unwrap_parens(n);
   string ty = t(n);
   if (ty == "binary_expression") {
@@ -71,7 +71,7 @@ static JSBoolOp js_get_bool_op(TSNode n, const string &src) {
   return JSBoolOp::Unknown;
 }
 
-static unsigned int js_count_bool_alternations(TSNode n, const string &src) {
+static unsigned int js_count_bool_alternations(TSNode n, const string& src) {
   n = js_unwrap_parens(n);
   string ty = t(n);
   unsigned int c = 0;
@@ -89,14 +89,14 @@ static unsigned int js_count_bool_alternations(TSNode n, const string &src) {
   return c;
 }
 
-static bool js_has_logical_op(TSNode n, const string &src) {
+static bool js_has_logical_op(TSNode n, const string& src) {
   auto s = js_slice(src, n);
   return s.find("&&") != string::npos || s.find("||") != string::npos ||
          s.find("!") != string::npos;
 }
 
 unsigned int JavaScriptGSGBuilder::js_count_bool_ops_expr(TSNode n, int nesting,
-                                                          const string &src) {
+                                                          const string& src) {
   if (ts_node_is_null(n)) return 0;
   string ty = t(n);
   if (ty == "binary_expression") {
@@ -126,7 +126,7 @@ unsigned int JavaScriptGSGBuilder::js_count_bool_ops_expr(TSNode n, int nesting,
 }
 
 std::vector<GSGNode> JavaScriptGSGBuilder::build_functions(TSNode root,
-                                                           const string &src) {
+                                                           const string& src) {
   std::vector<GSGNode> funcs;
   int n = ts_node_named_child_count(root);
   for (int i = 0; i < n; ++i) {
@@ -148,7 +148,7 @@ std::vector<GSGNode> JavaScriptGSGBuilder::build_functions(TSNode root,
   return funcs;
 }
 
-GSGNode JavaScriptGSGBuilder::build_function(TSNode n, const string &src) {
+GSGNode JavaScriptGSGBuilder::build_function(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::Function;
   g.name = string(name_of(n, src));
@@ -159,8 +159,8 @@ GSGNode JavaScriptGSGBuilder::build_function(TSNode n, const string &src) {
   return g;
 }
 
-void JavaScriptGSGBuilder::build_block_children(TSNode n, const string &src,
-                                                std::vector<GSGNode> &out,
+void JavaScriptGSGBuilder::build_block_children(TSNode n, const string& src,
+                                                std::vector<GSGNode>& out,
                                                 int nesting) {
   int m = ts_node_named_child_count(n);
   for (int i = 0; i < m; ++i) {
@@ -200,7 +200,7 @@ void JavaScriptGSGBuilder::build_block_children(TSNode n, const string &src,
                   arg = ts_node_named_child(cbody, 0);
                 if (!ts_node_is_null(arg)) {
                   unsigned int cost =
-                      js_count_bool_ops_expr(arg, nesting + 1, src);
+                    js_count_bool_ops_expr(arg, nesting + 1, src);
                   if (cost) {
                     GSGNode e;
                     e.kind = GSGNodeKind::Expr;
@@ -213,7 +213,7 @@ void JavaScriptGSGBuilder::build_block_children(TSNode n, const string &src,
                 if (ts_node_named_child_count(cbody) > 0) {
                   TSNode expr = ts_node_named_child(cbody, 0);
                   unsigned int cost =
-                      js_count_bool_ops_expr(expr, nesting + 1, src);
+                    js_count_bool_ops_expr(expr, nesting + 1, src);
                   if (cost) {
                     GSGNode e;
                     e.kind = GSGNodeKind::Expr;
@@ -287,7 +287,7 @@ void JavaScriptGSGBuilder::build_block_children(TSNode n, const string &src,
   }
 }
 
-GSGNode JavaScriptGSGBuilder::build_if(TSNode n, const string &src) {
+GSGNode JavaScriptGSGBuilder::build_if(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::If;
   g.loc = loc(n);
@@ -324,7 +324,7 @@ GSGNode JavaScriptGSGBuilder::build_if(TSNode n, const string &src) {
   return g;
 }
 
-GSGNode JavaScriptGSGBuilder::build_while(TSNode n, const string &src) {
+GSGNode JavaScriptGSGBuilder::build_while(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::While;
   g.loc = loc(n);
@@ -336,7 +336,7 @@ GSGNode JavaScriptGSGBuilder::build_while(TSNode n, const string &src) {
   return g;
 }
 
-GSGNode JavaScriptGSGBuilder::build_for(TSNode n, const string &src) {
+GSGNode JavaScriptGSGBuilder::build_for(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::For;
   g.loc = loc(n);
@@ -345,7 +345,7 @@ GSGNode JavaScriptGSGBuilder::build_for(TSNode n, const string &src) {
   return g;
 }
 
-GSGNode JavaScriptGSGBuilder::build_do_while(TSNode n, const string &src) {
+GSGNode JavaScriptGSGBuilder::build_do_while(TSNode n, const string& src) {
   (void)src;
   GSGNode g;
   g.kind = GSGNodeKind::DoWhile;

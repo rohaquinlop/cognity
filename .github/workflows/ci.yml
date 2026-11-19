@@ -17,10 +17,10 @@ jobs:
           - os: ubuntu-latest
             label: linux-x86_64
             shell: bash
-          - os: macos-13
+          - os: macos-15-intel
             label: macos-x86_64
             shell: bash
-          - os: macos-14
+          - os: macos-15
             label: macos-aarch64
             shell: bash
           - os: windows-latest
@@ -47,7 +47,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          cmake -S . -B "$env:BUILD_DIR" -G "Visual Studio 17 2022" -A x64
+          cmake -S . -B "$env:BUILD_DIR" -A x64
 
       - name: Build (Linux/macOS)
         if: runner.os != 'Windows'
@@ -71,3 +71,26 @@ jobs:
         run: |
           ctest --test-dir "$env:BUILD_DIR" -C Release --output-on-failure
 
+
+  lint:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up CMake
+        uses: lukka/get-cmake@v3.31.0
+
+      - name: Format
+        run: scripts/check.sh format
+
+      - name: Lint (changed lines)
+        env:
+          CHECK_BASE: ${{ github.event.pull_request.base.sha }}
+        run: scripts/check.sh lint
