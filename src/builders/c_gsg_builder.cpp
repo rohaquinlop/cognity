@@ -261,8 +261,7 @@ void CLikeGSGBuilder::build_block_children(TSNode n, const string& src,
                ty == "do_statement" || ty == "switch_statement") {
       collect_lambdas_in_node(ts_node_child_by_field_name(s, "condition", 9),
                               src, out);
-    } else if (ty == "return_statement" || ty == "expression_statement" ||
-               ty == "declaration" || ty == "throw_statement") {
+    } else if (ty != "try_statement" && ty != "compound_statement") {
       collect_lambdas_in_node(s, src, out);
     }
     if (ty == "if_statement")
