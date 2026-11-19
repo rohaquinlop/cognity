@@ -1314,7 +1314,8 @@ int main() {
   }
 
   {
-    std::string deep = "function f(a) {\n  return f(a)";
+    std::string deep = "function f(a, " + std::string(200000, '[') + "b" +
+                       std::string(200000, ']') + ") {\n  return f(a)";
     for (int i = 0; i < 20000; ++i) deep += "+a";
     deep += ";\n}\n";
     TSParser* parser = ts_parser_new();

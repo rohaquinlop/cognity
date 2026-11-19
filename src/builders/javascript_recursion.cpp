@@ -89,31 +89,32 @@ class Resolver {
     return src_.substr(a, ts_node_end_byte(n) - a);
   }
 
-  void bind_pattern(TSNode p, int scope, int owner, int cls) {
-    if (ts_node_is_null(p)) return;
-    string_view t = type_of(p);
-    if (t == "identifier" || t == "shorthand_property_identifier_pattern") {
-      scopes_[scope].names[text(p)].other = true;
-      return;
+  void bind_pattern(TSNode root, int scope, int owner, int cls) {
+    std::vector<std::pair<TSNode, bool>> stack{{root, false}};
+    while (!stack.empty()) {
+      auto [p, is_value] = stack.back();
+      stack.pop_back();
+      if (ts_node_is_null(p)) continue;
+      if (is_value) {
+        walk(p, scope, owner, cls);
+        continue;
+      }
+      string_view t = type_of(p);
+      if (t == "identifier" || t == "shorthand_property_identifier_pattern") {
+        scopes_[scope].names[text(p)].other = true;
+      } else if (t == "assignment_pattern") {
+        stack.emplace_back(field(p, "right"), true);
+        stack.emplace_back(field(p, "left"), false);
+      } else if (t == "required_parameter" || t == "optional_parameter") {
+        stack.emplace_back(field(p, "value"), true);
+        stack.emplace_back(field(p, "pattern"), false);
+      } else if (t == "pair_pattern") {
+        stack.emplace_back(field(p, "value"), false);
+      } else if (t != "type_annotation") {
+        for (uint32_t i = ts_node_named_child_count(p); i > 0; --i)
+          stack.emplace_back(ts_node_named_child(p, i - 1), false);
+      }
     }
-    if (t == "type_annotation") return;
-    if (t == "assignment_pattern") {
-      bind_pattern(field(p, "left"), scope, owner, cls);
-      walk(field(p, "right"), scope, owner, cls);
-      return;
-    }
-    if (t == "required_parameter" || t == "optional_parameter") {
-      bind_pattern(field(p, "pattern"), scope, owner, cls);
-      walk(field(p, "value"), scope, owner, cls);
-      return;
-    }
-    if (t == "pair_pattern") {
-      bind_pattern(field(p, "value"), scope, owner, cls);
-      return;
-    }
-    uint32_t n = ts_node_named_child_count(p);
-    for (uint32_t i = 0; i < n; ++i)
-      bind_pattern(ts_node_named_child(p, i), scope, owner, cls);
   }
 
   void walk_function(TSNode n, int scope, int owner, int cls) {
