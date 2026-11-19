@@ -23,13 +23,8 @@ static std::string read_file(const std::filesystem::path& p) {
   return data;
 }
 
-static std::vector<FunctionComplexity> analyze_file(
-  const std::filesystem::path& rel, Language lang) {
-  // Resolve path relative to project root (source dir). Use this source file
-  // location to find the repository root regardless of current working dir.
-  static const std::filesystem::path project_root =
-    std::filesystem::path(__FILE__).parent_path().parent_path();
-  std::filesystem::path p = project_root / rel;
+static std::vector<FunctionComplexity> analyze_source(const std::string& src,
+                                                      Language lang) {
   TSParser* parser = ts_parser_new();
   switch (lang) {
     case Language::Python:
@@ -53,17 +48,29 @@ static std::vector<FunctionComplexity> analyze_file(
       ts_parser_delete(parser);
       return {};
   }
-  std::string src = read_file(p);
   auto fns = functions_complexity_file(src, parser, lang);
   ts_parser_delete(parser);
   return fns;
 }
 
+static std::vector<FunctionComplexity> analyze_file(
+  const std::filesystem::path& rel, Language lang) {
+  // Resolve path relative to project root (source dir). Use this source file
+  // location to find the repository root regardless of current working dir.
+  static const std::filesystem::path project_root =
+    std::filesystem::path(__FILE__).parent_path().parent_path();
+  return analyze_source(read_file(project_root / rel), lang);
+}
+
+static unsigned int total(const std::vector<FunctionComplexity>& fns) {
+  unsigned int sum = 0;
+  for (const auto& fn : fns) sum += fn.complexity;
+  return sum;
+}
+
 static unsigned int compute_file_complexity_lang(
   const std::filesystem::path& rel, Language lang) {
-  unsigned int sum = 0;
-  for (const auto& fn : analyze_file(rel, lang)) sum += fn.complexity;
-  return sum;
+  return total(analyze_file(rel, lang));
 }
 
 static unsigned int row_cost(const std::vector<FunctionComplexity>& fns,
@@ -73,6 +80,1001 @@ static unsigned int row_cost(const std::vector<FunctionComplexity>& fns,
     for (const auto& line : fn.lines)
       if (line.row == row) sum += line.complexity;
   return sum;
+}
+
+static std::vector<std::pair<std::string, unsigned int>> recursion_cases() {
+  return {
+    {R"py(def g():
+    return f()
+def f():
+    def g():
+        return 1
+    return g()
+)py",
+     0},
+    {R"py(if X:
+    def f():
+        return 1
+else:
+    def f():
+        return g()
+def g():
+    return f()
+)py",
+     2},
+    {R"py(if X:
+    class C:
+        def m(self):
+            return self.m()
+else:
+    class C:
+        def m(self):
+            return 1
+)py",
+     1},
+    {R"py(def helper():
+    return 0
+def f():
+    def helper():
+        return 1
+    class C:
+        def m(self):
+            return helper()
+    return C
+)py",
+     0},
+    {R"py(def f(n):
+    return lambda k: f(k)
+)py",
+     1},
+    {R"py(def f(n):
+    return lambda k=f(n): k
+)py",
+     1},
+    {R"py(def f(n):
+    def inner(x=f(n)):
+        return x
+    return inner
+)py",
+     1},
+    {R"py(def f(n):
+    @f(n)
+    def inner():
+        pass
+    return inner
+)py",
+     1},
+    {R"py(def f(n):
+    class K(f(n)):
+        pass
+    return K
+)py",
+     1},
+    {R"py(def f(n):
+    class K: x = f(n)
+    return K
+)py",
+     1},
+    {R"py(def f(n):
+    return [f(x) for x in range(n)]
+)py",
+     1},
+    {R"py(def f(n):
+    return [x for f in f(n)]
+)py",
+     1},
+    {R"py(def f(n):
+    return lambda f: f()
+)py",
+     0},
+    {R"py(def f(n):
+    return lambda *f: f()
+)py",
+     0},
+    {R"py(def f(n):
+    @f
+    def inner():
+        pass
+    return inner
+)py",
+     0},
+    {R"py(class C:
+    def m(self):
+        return lambda self: self.m()
+)py",
+     0},
+    {R"py(def f(n):
+    def inner():
+        return f(n)
+    return lambda inner: inner()
+)py",
+     0},
+    {R"py(def f(fs):
+    return [f(x) for f in fs]
+)py",
+     0},
+    {R"py(def f(fs):
+    return {k: f() for k, f in fs}
+)py",
+     0},
+    {R"py(def f(n):
+    class K[f](f()):
+        pass
+    return K
+)py",
+     0},
+    {R"py(def T(n):
+    class Box[T]:
+        def m(self):
+            return T(self)
+    return Box.m(None)
+)py",
+     0},
+    {R"py(def g():
+    return f()
+def f[g]():
+    return g()
+)py",
+     0},
+    {R"py(def other():
+    return 1
+def f():
+    other()
+    return f()
+)py",
+     1},
+    {R"py(def g():
+    return f()
+def f():
+    class g:
+        pass
+    return g()
+)py",
+     0},
+    {R"py(def g():
+    return f()
+def f():
+    from m import g
+    return g()
+)py",
+     0},
+    {R"py(import a.g as g
+def h():
+    return g()
+def g():
+    return h()
+)py",
+     2},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+class Box[K]:
+    item: K
+)py",
+     1},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+def f():
+    global K
+)py",
+     1},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+class O:
+    global K
+)py",
+     1},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+xs = [K for K in range(3)]
+)py",
+     1},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+xs = {K: v for K, *v in []}
+)py",
+     1},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+def f():
+    K = 1
+    def g():
+        nonlocal K
+        K = 2
+)py",
+     1},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+)py",
+     1},
+    {R"py(class K:
+    @classmethod
+    def s(cls, n):
+        return K.s(n - 1)
+)py",
+     1},
+    {R"py(class K:
+    def s(self, n):
+        return K.s(self, n - 1)
+)py",
+     1},
+    {R"py(def f():
+    class K:
+        @staticmethod
+        def s(n):
+            return K.s(n - 1)
+    return K
+)py",
+     1},
+    {R"py(class O:
+    from m import K
+class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+)py",
+     1},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+class K:
+    pass
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+K = object()
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+from m import K
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+def K():
+    pass
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+for K in []:
+    pass
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+class O:
+    global K
+    K = 1
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+from m import *
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+with open(p) as K:
+    pass
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+del K
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+K += 1
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+type K = int
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+K: int = 1
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+xs = [(K := x) for x in []]
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+def f():
+    global K
+    import K
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+def f():
+    global K
+    def K():
+        pass
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+try:
+    pass
+except E as K:
+    pass
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+match x:
+    case [P(a=(1 | {**K}))]:
+        pass
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+def f():
+    global K
+    K = 1
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(K):
+        return K.s(1)
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        K = n
+        return K.s(1)
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(ks):
+        return [K.s(x) for K in ks]
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        class C:
+            K = 1
+            x = K.s(n)
+        return n
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        class C:
+            def K(self):
+                pass
+            x = K.s(n)
+        return n
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        class C:
+            import K
+            x = K.s(n)
+        return n
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        def g(x=(K := 1)):
+            pass
+        return K.s(n - 1)
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        f = lambda x=(K := 1): x
+        return K.s(n - 1)
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        class C((K := object)):
+            pass
+        return K.s(n - 1)
+)py",
+     0},
+    {R"py(def f():
+    class K:
+        @staticmethod
+        def s(n):
+            return K.s(n - 1)
+    def g():
+        nonlocal K
+        K = 1
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def t(n):
+        return K.s(n)
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s[K](n):
+        return K.s(n - 1)
+)py",
+     0},
+    {R"py(class K:
+    @staticmethod
+    def s(n):
+        return C.s(n)
+class C[K]:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+)py",
+     0},
+    {R"py(class O:
+    class K:
+        @staticmethod
+        def s(n):
+            return K.s(n - 1)
+)py",
+     0},
+    {R"py(K = None
+class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+)py",
+     1},
+    {R"py(from m import K
+class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+)py",
+     1},
+    {R"py(def K():
+    pass
+class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+)py",
+     1},
+    {R"py(for K in []:
+    pass
+class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+)py",
+     1},
+    {R"py(if c:
+    K = None
+else:
+    class K:
+        @staticmethod
+        def s(n):
+            return K.s(n - 1)
+)py",
+     1},
+    {R"py(for x in xs:
+    K = None
+    class K:
+        @staticmethod
+        def s(n):
+            return K.s(n - 1)
+)py",
+     1},
+    {R"py(K = None
+class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+K = None
+)py",
+     0},
+    {R"py(from m import *
+class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+)py",
+     0},
+    {R"py(for x in xs:
+    class K:
+        @staticmethod
+        def s(n):
+            return K.s(n - 1)
+    K = None
+)py",
+     0},
+    {R"py(K = None
+class K:
+    @staticmethod
+    def s(n):
+        return K.s(n - 1)
+class K:
+    pass
+)py",
+     0},
+    {R"py(def f():
+    K = None
+    class K:
+        x = K.s(1)
+        @staticmethod
+        def s(n):
+            return f()
+)py",
+     0},
+    {R"py(def f():
+    class K:
+        x = K.s(1)
+        @staticmethod
+        def s(n):
+            return f()
+)py",
+     0},
+    {R"py(def f():
+    K = None
+    @d(K.s(1))
+    class K:
+        @staticmethod
+        def s(n):
+            return f()
+)py",
+     0},
+    {R"py(def f():
+    K = None
+    class K(K.s(1)):
+        @staticmethod
+        def s(n):
+            return f()
+)py",
+     0},
+    {R"py(def f():
+    K = None
+    class K:
+        class C:
+            x = K.s(1)
+        @staticmethod
+        def s(n):
+            return f()
+)py",
+     0},
+    {R"py(def f():
+    K = None
+    class K:
+        x = [K.s(i) for i in r]
+        @staticmethod
+        def s(n):
+            return f()
+)py",
+     0},
+    {R"py(def f():
+    class K:
+        g = lambda: K.s(1)
+        @staticmethod
+        def s(n):
+            return f()
+    return K
+)py",
+     2},
+    {R"py(class C:
+    @staticmethod
+    def m():
+        return f()
+def f():
+    class K:
+        class C:
+            x = C.m()
+)py",
+     2},
+    {R"py(class C:
+    @staticmethod
+    def m():
+        return f()
+def f():
+    class K:
+        class C(C.m()):
+            pass
+)py",
+     2},
+    {R"py(def f(n):
+    class C:
+        x = f(n)
+        f = 1
+    return C
+)py",
+     1},
+    {R"py(def f(n):
+    class C:
+        f = 1
+        x = f(n)
+    return C
+)py",
+     0},
+    {R"py(def f(n):
+    class C:
+        f = f(n)
+    return C
+)py",
+     1},
+    {R"py(def f(n):
+    class C:
+        if n:
+            f = 1
+        x = f(n)
+    return C
+)py",
+     1},
+    {R"py(def f(n):
+    class C:
+        f = 1
+        del f
+        x = f(n)
+    return C
+)py",
+     1},
+    {R"py(def outer():
+    def f(n):
+        class C:
+            x = f(n)
+            f = 1
+        return C
+    return f
+)py",
+     0},
+    {R"py(def f(n):
+    class C:
+        def g(x):
+            return f(x)
+        y = g(n)
+    return C
+)py",
+     2},
+    {R"py(def f(f):
+    return f()
+)py",
+     0},
+    {R"py(def g(n):
+    g = n
+    return g()
+)py",
+     0},
+    {R"py(def f(n):
+    if (f := n):
+        return f()
+)py",
+     1},
+    {R"py(def f(n):
+    for f in n:
+        f()
+)py",
+     1},
+    {R"py(def f(n):
+    with n as f:
+        return f()
+)py",
+     0},
+    {R"py(def f(n):
+    try:
+        pass
+    except E as f:
+        f()
+)py",
+     1},
+    {R"py(def f(n):
+    match n:
+        case [f]:
+            f()
+)py",
+     1},
+    {R"py(def f(n):
+    del f
+    return f()
+)py",
+     0},
+    {R"py(def f(n):
+    type f = int
+    return f()
+)py",
+     0},
+    {R"py(def f(n):
+    import f
+    return f()
+)py",
+     0},
+    {R"py(def f(n):
+    f += 1
+    return f()
+)py",
+     0},
+    {R"py(def f(n):
+    f: int = n
+    return f()
+)py",
+     0},
+    {R"py(def f(n):
+    f: int
+    return f()
+)py",
+     0},
+    {R"py(def f(n):
+    class f:
+        pass
+    return f()
+)py",
+     0},
+    {R"py(def f(n):
+    def outer(f):
+        def g(m):
+            return f(m)
+        return g(f)
+    return outer(n)
+)py",
+     0},
+    {R"py(def f(n):
+    return f()
+f = wrap(f)
+)py",
+     0},
+    {R"py(def f(n):
+    return f()
+for f in []:
+    pass
+)py",
+     0},
+    {R"py(def f(n):
+    return f()
+def h():
+    global f
+    f = 1
+)py",
+     0},
+    {R"py(def outer():
+    def f(n):
+        return f()
+    def h():
+        nonlocal f
+        f = 1
+    return f
+)py",
+     0},
+    {R"py(def outer():
+    def f(n):
+        return f()
+    f = wrap(f)
+    return f
+)py",
+     0},
+    {R"py(def f(n):
+    return f()
+class f:
+    pass
+)py",
+     0},
+    {R"py(if X:
+    def f(n):
+        return f()
+else:
+    pass
+f = 1
+)py",
+     0},
+    {R"py(try:
+    def f(n):
+        return f()
+    g()
+except E:
+    f = 1
+)py",
+     0},
+    {R"py(for x in xs:
+    def f(n):
+        return f()
+else:
+    f = 1
+)py",
+     0},
+    {R"py(def g():
+    return f()
+def f():
+    g = 1
+    return g()
+)py",
+     0},
+    {R"py(def g():
+    return f()
+def f():
+    def h():
+        return g()
+    g = 1
+    return h()
+)py",
+     0},
+    {R"py(f = 1
+def f(n):
+    return f()
+)py",
+     1},
+    {R"py(from m import f
+def f(n):
+    return f()
+)py",
+     1},
+    {R"py(def f(n):
+    return f()
+f.cache = {}
+)py",
+     1},
+    {R"py(@d(f := 1)
+def f(n):
+    return f()
+)py",
+     1},
+    {R"py(def outer(f):
+    def f(n):
+        return f()
+    return f
+)py",
+     1},
+    {R"py(if X:
+    f = 1
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(class f:
+    pass
+def f(n):
+    return f()
+)py",
+     1},
+    {R"py(def f(n=(f := 1)):
+    return f()
+)py",
+     1},
+    {R"py(try:
+    f = 1
+except E:
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(for x in xs:
+    f = 1
+else:
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(for x in (f := xs):
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(while (f := X):
+    pass
+else:
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(def h():
+    global g
+    return g
+def f(n):
+    return f()
+)py",
+     1},
+    {R"py(def f(n):
+    return f(n)
+f = 1
+def f(n):
+    return f(n)
+)py",
+     1},
+    {R"py(for x in xs:
+    f = 1
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(for f in xs:
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(for x in xs:
+    f = 1
+    for y in ys:
+        break
+    def f(n):
+        return f()
+)py",
+     1},
+    {R"py(for x in xs:
+    if c:
+        f = 1
+        def f(n):
+            return f()
+)py",
+     1},
+    {R"py(def f(n):
+    return f()
+f: int
+)py",
+     1},
+    {R"py(def outer():
+    def f(n):
+        return f()
+    f: int
+    return f
+)py",
+     1},
+  };
 }
 
 int main() {
@@ -86,7 +1088,7 @@ int main() {
     {"tests/src/python/test_match.py", 1},
     {"tests/src/python/test_multiple_func.py", 0},
     {"tests/src/python/test_nested_func.py", 2},
-    {"tests/src/python/test_recursive.py", 0},
+    {"tests/src/python/test_recursive.py", 1},
     {"tests/src/python/test_ternary_op.py", 1},
     {"tests/src/python/test_try.py", 3},
     {"tests/src/python/test_try_nested.py", 13},
@@ -114,6 +1116,7 @@ int main() {
     {"tests/src/python/test_function_discovery.py", 2},
     {"tests/src/python/test_nested_definitions.py", 4},
     {"tests/src/python/test_bool_paren_comment.py", 1},
+    {"tests/src/python/test_recursion.py", 10},
   };
 
   bool ok = true;
@@ -244,6 +1247,44 @@ int main() {
     if (got != exp) {
       std::cerr << "Line cost mismatch for test_try_nested.py line " << row + 1
                 << ": expected " << exp << ", got " << got << "\n";
+      ok = false;
+    }
+  }
+
+  const auto recursion =
+    analyze_file("tests/src/python/test_recursion.py", Language::Python);
+  for (const auto& [row, exp] : std::map<unsigned int, unsigned int>{
+         {1, 1},
+         {2, 0},
+         {6, 1},
+         {15, 1},
+       }) {
+    unsigned int got = row_cost(recursion, row);
+    if (got != exp) {
+      std::cerr << "Line cost mismatch for test_recursion.py line " << row + 1
+                << ": expected " << exp << ", got " << got << "\n";
+      ok = false;
+    }
+  }
+
+  for (const auto& [code, exp] : recursion_cases()) {
+    unsigned int got = total(analyze_source(code, Language::Python));
+    if (got != exp) {
+      std::cerr << "Recursion case mismatch: expected " << exp << ", got "
+                << got << "\n"
+                << code << "\n";
+      ok = false;
+    }
+  }
+
+  {
+    const std::size_t count = 20000;
+    std::string chain;
+    for (std::size_t i = 0; i < count; ++i)
+      chain += "def f" + std::to_string(i) + "():\n    return f" +
+               std::to_string((i + 1) % count) + "()\n";
+    if (total(analyze_source(chain, Language::Python)) != count) {
+      std::cerr << "Recursion: 20000-def python cycle not fully detected\n";
       ok = false;
     }
   }

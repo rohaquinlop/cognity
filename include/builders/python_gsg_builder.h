@@ -8,6 +8,10 @@ class PythonGSGBuilder : public IBuilder {
   std::vector<GSGNode> build_functions(TSNode root,
                                        const std::string& source) override;
 
+  std::vector<RecursiveDef> recursive_defs(TSNode root,
+                                           const std::string& src) override;
+  static SourceLoc loc_from_node(TSNode node);
+
  private:
   void collect_functions(TSNode node, const std::string& source,
                          const std::string& qual, std::vector<GSGNode>& out);
@@ -31,7 +35,6 @@ class PythonGSGBuilder : public IBuilder {
   void push_else(TSNode else_clause, const std::string& source,
                  std::vector<GSGNode>& out);
 
-  static SourceLoc loc_from_node(TSNode node);
   static std::string_view slice_source(const std::string& source, TSNode node);
   static std::string_view get_identifier(TSNode node,
                                          const std::string& source);
