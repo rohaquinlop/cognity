@@ -76,8 +76,11 @@ file → sourcing.cpp (language by extension, .gitignore, excludes)
 
 - Style: `.clang-format` (Google base, 80 columns, `PointerAlignment: Left`).
   The Claude Code hook formats edited files. Do not hand-format.
-- Lint: `.clang-tidy` (bugprone, performance, modernize). The gate checks only
-  changed lines. Old warnings exist; fix them only when you touch that code.
+- Lint: `.clang-tidy` (bugprone, performance, modernize). Disabled:
+  `modernize-use-trailing-return-type` (conflicts with the Google style) and
+  `bugprone-easily-swappable-parameters` (noisy for `(src, name)` string
+  pairs). The gate checks only changed lines. Old warnings exist; fix them
+  only when you touch that code.
 - New `.cpp` file: add it to every CMake target that compiles it. `cognity`
   lists all sources; `cognity_tests` lists only what the tests link (no
   `main.cpp`, `output.cpp`, `sourcing.cpp`).
