@@ -123,7 +123,7 @@ std::vector<FunctionComplexity> functions_complexity_file(
   const std::string& source_code, TSParser* parser, Language lang) {
   std::vector<FunctionComplexity> functions;
 
-  TSTree* tree = ts_parser_parse_string(parser, NULL, source_code.c_str(),
+  TSTree* tree = ts_parser_parse_string(parser, nullptr, source_code.c_str(),
                                         strlen(source_code.c_str()));
   TSNode root_node = ts_tree_root_node(tree);
 
