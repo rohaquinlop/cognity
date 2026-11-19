@@ -101,6 +101,7 @@ int main() {
     {"tests/src/python/test_nested_def_nesting.py", 6},
     {"tests/src/python/test_except_match_nesting.py", 6},
     {"tests/src/python/test_ternary_nesting.py", 3},
+    {"tests/src/python/test_ternary_branches.py", 6},
   };
 
   bool ok = true;
@@ -124,6 +125,7 @@ int main() {
   const std::map<std::string, unsigned int> js_expected = {
     {"tests/src/javascript/test_if.js", 6},
     {"tests/src/javascript/test_switch_ternary.js", 3},
+    {"tests/src/javascript/test_ternary_nested.js", 5},
   };
   for (const auto& [path, exp] : js_expected) {
     unsigned int got = 0;
@@ -164,6 +166,7 @@ int main() {
   // C
   const std::map<std::string, unsigned int> c_expected = {
     {"tests/src/c/test_if.c", 4},
+    {"tests/src/c/test_ternary_nested.c", 5},
   };
   for (const auto& [path, exp] : c_expected) {
     unsigned int got = 0;

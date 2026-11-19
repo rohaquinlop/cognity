@@ -113,17 +113,19 @@ void JavaScriptGSGBuilder::collect_expr(TSNode n, const string& src,
       return;
     }
   }
-  GSGNode* target = &into;
-  GSGNode tern;
   if (ty == "ternary_expression") {
+    GSGNode tern;
     tern.kind = GSGNodeKind::Ternary;
     tern.loc = loc(n);
-    target = &tern;
+    push_header(tern, ts_node_child_by_field_name(n, "condition", 9), src);
+    collect_expr(ts_node_child_by_field_name(n, "consequence", 11), src, tern);
+    collect_expr(ts_node_child_by_field_name(n, "alternative", 11), src, tern);
+    into.children.emplace_back(std::move(tern));
+    return;
   }
   int m = ts_node_named_child_count(n);
   for (int i = 0; i < m; ++i)
-    collect_expr(ts_node_named_child(n, i), src, *target);
-  if (target == &tern) into.children.emplace_back(std::move(tern));
+    collect_expr(ts_node_named_child(n, i), src, into);
 }
 
 void JavaScriptGSGBuilder::push_expr(std::vector<GSGNode>& out, TSNode loc_node,

@@ -89,9 +89,16 @@ void PythonGSGBuilder::collect_expr(TSNode node, const string& source,
     GSGNode tern;
     tern.kind = GSGNodeKind::Ternary;
     tern.loc = loc_from_node(node);
-    int m = ts_node_named_child_count(node);
-    for (int i = 0; i < m; ++i)
-      collect_expr(ts_node_named_child(node, i), source, tern);
+    int part = 0;
+    uint32_t m = ts_node_named_child_count(node);
+    for (uint32_t i = 0; i < m; ++i) {
+      TSNode ch = ts_node_named_child(node, i);
+      if (ts_node_is_extra(ch)) continue;
+      if (part++ == 1)
+        push_header(tern, ch, source);
+      else
+        collect_expr(ch, source, tern);
+    }
     into.children.emplace_back(std::move(tern));
     return;
   }
