@@ -149,45 +149,43 @@ class Resolver {
 
   void bind_targets(TSNode target, int scope, uint32_t pos, uint32_t block,
                     BindKind kind, int owner) {
-    if (ts_node_is_null(target)) return;
-    string_view t = type_of(target);
-    if (t == "identifier") {
-      bind(scope, text(target), kind, pos, block);
-      return;
+    std::vector<TSNode> stack{target};
+    while (!stack.empty()) {
+      TSNode cur = stack.back();
+      stack.pop_back();
+      if (ts_node_is_null(cur)) continue;
+      string_view t = type_of(cur);
+      if (t == "identifier") {
+        bind(scope, text(cur), kind, pos, block);
+      } else if (t == "attribute" || t == "subscript") {
+        walk(cur, scope, owner, block);
+      } else {
+        for (uint32_t i = ts_node_named_child_count(cur); i > 0; --i)
+          stack.push_back(ts_node_named_child(cur, i - 1));
+      }
     }
-    if (t == "attribute" || t == "subscript") {
-      walk(target, scope, owner, block);
-      return;
-    }
-    uint32_t n = ts_node_named_child_count(target);
-    for (uint32_t i = 0; i < n; ++i)
-      bind_targets(ts_node_named_child(target, i), scope, pos, block, kind,
-                   owner);
   }
 
   void bind_captures(TSNode pattern, int scope, uint32_t pos, uint32_t block,
                      int owner) {
-    if (ts_node_is_null(pattern)) return;
-    string_view t = type_of(pattern);
-    if (t == "dotted_name") {
-      if (ts_node_named_child_count(pattern) == 1)
-        bind(scope, text(pattern), BindKind::Other, pos, block);
-      return;
+    std::vector<TSNode> stack{pattern};
+    while (!stack.empty()) {
+      TSNode cur = stack.back();
+      stack.pop_back();
+      if (ts_node_is_null(cur)) continue;
+      string_view t = type_of(cur);
+      if (t == "dotted_name") {
+        if (ts_node_named_child_count(cur) == 1)
+          bind(scope, text(cur), BindKind::Other, pos, block);
+      } else if (t == "splat_pattern" || t == "as_pattern_target") {
+        bind_targets(cur, scope, pos, block, BindKind::Other, owner);
+      } else {
+        const uint32_t first =
+          t == "class_pattern" || t == "keyword_pattern" ? 1 : 0;
+        for (uint32_t i = ts_node_named_child_count(cur); i > first; --i)
+          stack.push_back(ts_node_named_child(cur, i - 1));
+      }
     }
-    if (t == "splat_pattern" || t == "as_pattern_target") {
-      bind_targets(pattern, scope, pos, block, BindKind::Other, owner);
-      return;
-    }
-    if (t == "class_pattern" || t == "keyword_pattern") {
-      uint32_t n = ts_node_named_child_count(pattern);
-      for (uint32_t i = 1; i < n; ++i)
-        bind_captures(ts_node_named_child(pattern, i), scope, pos, block,
-                      owner);
-      return;
-    }
-    uint32_t n = ts_node_named_child_count(pattern);
-    for (uint32_t i = 0; i < n; ++i)
-      bind_captures(ts_node_named_child(pattern, i), scope, pos, block, owner);
   }
 
   void bind_type_params(TSNode params, int scope, uint32_t pos) {
@@ -351,19 +349,26 @@ class Resolver {
   }
 
   void walk(TSNode n, int scope, int owner, uint32_t block) {
-    std::vector<TSNode> stack{n};
+    std::vector<std::pair<TSNode, int>> stack{{n, scope}};
     while (!stack.empty()) {
-      TSNode cur = stack.back();
+      auto [cur, cur_scope] = stack.back();
       stack.pop_back();
-      if (ts_node_is_null(cur) || walk_special(cur, scope, owner, block))
+      if (ts_node_is_null(cur)) continue;
+      if (type_of(cur) == "lambda") {
+        const int inner = new_scope(ScopeKind::Lambda, cur_scope);
+        bind_params(field(cur, "parameters"), inner, cur_scope, owner, block,
+                    nullptr);
+        stack.emplace_back(field(cur, "body"), inner);
         continue;
+      }
+      if (walk_special(cur, cur_scope, owner, block)) continue;
       if (type_of(cur) == "call" && owner != kNone)
         calls_.push_back({.owner = owner,
-                          .scope = scope,
+                          .scope = cur_scope,
                           .pos = ts_node_start_byte(cur),
                           .node = cur});
       for (uint32_t i = ts_node_named_child_count(cur); i > 0; --i)
-        stack.push_back(ts_node_named_child(cur, i - 1));
+        stack.emplace_back(ts_node_named_child(cur, i - 1), cur_scope);
     }
   }
 
@@ -386,10 +391,6 @@ class Resolver {
       walk_def(n, TSNode{}, scope, owner, block);
     } else if (t == "class_definition") {
       walk_class(n, n, scope, owner, block);
-    } else if (t == "lambda") {
-      const int inner = new_scope(ScopeKind::Lambda, scope);
-      bind_params(field(n, "parameters"), inner, scope, owner, block, nullptr);
-      walk(field(n, "body"), inner, owner, block);
     } else if (is_comprehension(t)) {
       walk_comprehension(n, scope, owner, block);
     } else if (t == "assignment") {

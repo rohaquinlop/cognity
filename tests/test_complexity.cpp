@@ -1193,7 +1193,7 @@ int main() {
     {"tests/src/c/test_ternary_nested.c", 5},
     {"tests/src/c/test_bool_ops.c", 9},
     {"tests/src/c/test_bool_paren_comment.c", 1},
-    {"tests/src/c/test_recursion.c", 10},
+    {"tests/src/c/test_recursion.c", 11},
   };
   for (const auto& [path, exp] : c_expected) {
     unsigned int got = 0;
@@ -1296,7 +1296,14 @@ int main() {
   }
 
   {
-    std::string deep = "def f(a):\n    return f(a)";
+    const std::size_t depth = 200000;
+    std::string deep = "def f(a):\n    " + std::string(depth, '[') + "b" +
+                       std::string(depth, ']') + " = a\n    match a:\n" +
+                       "        case " + std::string(depth, '[') + "c" +
+                       std::string(depth, ']') +
+                       ":\n            pass\n    g = ";
+    for (std::size_t i = 0; i < depth; ++i) deep += "lambda: ";
+    deep += "a\n    return f(a)";
     for (int i = 0; i < 20000; ++i) deep += "+a";
     deep += '\n';
     TSParser* parser = ts_parser_new();
