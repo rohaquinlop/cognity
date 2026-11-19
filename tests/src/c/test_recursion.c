@@ -18,3 +18,12 @@ int is_even(int n) {
 int no_args(void) {
   return no_args();
 }
+
+int apply(int (*apply)(int)) {
+  return apply(0);
+}
+
+int local_shadow(int n) {
+  int (*local_shadow)(int) = 0;
+  return local_shadow(n);
+}

@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../../include/builders/c_gsg_builder.h"
@@ -67,6 +68,47 @@ void arity(TSNode def, const string& src, uint32_t& min_args,
   if (max_args != kVariadic && max_args < min_args) max_args = min_args;
 }
 
+TSNode declared_name(TSNode decl) {
+  while (!ts_node_is_null(decl) && type_of(decl) != "identifier") {
+    TSNode inner = field(decl, "declarator");
+    if (ts_node_is_null(inner) && ts_node_named_child_count(decl) > 0)
+      inner = ts_node_named_child(decl, 0);
+    decl = inner;
+  }
+  return decl;
+}
+
+void collect_locals(TSNode n, const string& src,
+                    std::unordered_set<string>& out) {
+  if (ts_node_is_null(n)) return;
+  std::vector<TSNode> stack{n};
+  while (!stack.empty()) {
+    TSNode cur = stack.back();
+    stack.pop_back();
+    string_view t = type_of(cur);
+    if (t == "parameter_declaration" || t == "optional_parameter_declaration" ||
+        t == "declaration") {
+      uint32_t m = ts_node_child_count(cur);
+      for (uint32_t i = 0; i < m; ++i) {
+        const char* f = ts_node_field_name_for_child(cur, i);
+        if (!f || string_view(f) != "declarator") continue;
+        TSNode decl = ts_node_child(cur, i);
+        if (t == "declaration" && type_of(decl) == "function_declarator")
+          continue;
+        TSNode name = declared_name(decl);
+        if (!ts_node_is_null(name)) {
+          const uint32_t a = ts_node_start_byte(name);
+          out.insert(src.substr(a, ts_node_end_byte(name) - a));
+        }
+      }
+    }
+    if (t == "lambda_expression") continue;
+    uint32_t m = ts_node_named_child_count(cur);
+    for (uint32_t i = 0; i < m; ++i)
+      stack.push_back(ts_node_named_child(cur, i));
+  }
+}
+
 uint32_t argument_count(TSNode call) {
   TSNode args = field(call, "arguments");
   if (ts_node_is_null(args)) return 0;
@@ -120,6 +162,7 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
   };
 
   std::vector<std::vector<CallEdge>> edges(funcs.size());
+  std::vector<std::unordered_set<string>> locals(funcs.size());
   for (const bool calls : {false, true}) {
     std::vector<std::pair<TSNode, std::size_t>> stack{{root, funcs.size()}};
     while (!stack.empty()) {
@@ -130,13 +173,20 @@ std::vector<RecursiveDef> CLikeGSGBuilder::recursive_defs(TSNode root,
         auto it = by_start.find(ts_node_start_byte(n));
         if (it != by_start.end()) {
           owner = it->second;
-          if (!calls) arity(n, src, defs[owner].min_args, defs[owner].max_args);
+          if (!calls) {
+            arity(n, src, defs[owner].min_args, defs[owner].max_args);
+            collect_locals(
+              field(function_declarator(field(n, "declarator")), "parameters"),
+              src, locals[owner]);
+            collect_locals(field(n, "body"), src, locals[owner]);
+          }
         }
       } else if (calls && t == "call_expression" && owner < funcs.size()) {
         TSNode fn = field(n, "function");
         string_view ft = type_of(fn);
         string name;
-        if (ft == "identifier" || ft == "qualified_identifier")
+        if (ft == "qualified_identifier" ||
+            (ft == "identifier" && !locals[owner].contains(text(fn))))
           name = text(fn);
         else if (ft == "field_expression" &&
                  type_of(field(fn, "argument")) == "this")
