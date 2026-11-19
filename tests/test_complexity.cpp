@@ -1371,6 +1371,19 @@ T f(T x) {
 int f(double x) { return f(1); }
 )src",
      Language::Cpp, 1},
+    {R"src(int f(int n) { return n; }
+int f(double x) { return f(- 1); }
+)src",
+     Language::Cpp, 0},
+    {R"src(int f(int g(int f)) { return f(1); }
+)src",
+     Language::Cpp, 1},
+    {R"src(int f(int n) {
+  int (*fp)(int f) = 0;
+  return f(n - 1);
+}
+)src",
+     Language::C, 1},
   };
 }
 
