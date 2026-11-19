@@ -66,6 +66,11 @@ class Resolver {
   std::vector<RecursiveDef> run(TSNode root) {
     scopes_.push_back(Scope{.parent = kNone});
     walk(root, 0, kNone, kNone);
+    for (const auto& [scope, name] : assigned_) {
+      int s = scope;
+      while (s != 0 && !scopes_[s].names.contains(name)) s = scopes_[s].parent;
+      scopes_[s].names[name].other = true;
+    }
     std::vector<std::vector<CallEdge>> edges(defs_.size());
     for (const auto& c : calls_)
       for (int callee : callees(c))
@@ -83,13 +88,15 @@ class Resolver {
   std::vector<Def> defs_;
   std::vector<std::unordered_map<string, std::vector<int>>> classes_;
   std::vector<Call> calls_;
+  std::vector<std::pair<int, string>> assigned_;
 
   [[nodiscard]] string text(TSNode n) const {
     const uint32_t a = ts_node_start_byte(n);
     return src_.substr(a, ts_node_end_byte(n) - a);
   }
 
-  void bind_pattern(TSNode root, int scope, int owner, int cls) {
+  void bind_pattern(TSNode root, int scope, int owner, int cls,
+                    bool assign = false) {
     std::vector<std::pair<TSNode, bool>> stack{{root, false}};
     while (!stack.empty()) {
       auto [p, is_value] = stack.back();
@@ -101,7 +108,12 @@ class Resolver {
       }
       string_view t = type_of(p);
       if (t == "identifier" || t == "shorthand_property_identifier_pattern") {
-        scopes_[scope].names[text(p)].other = true;
+        if (assign)
+          assigned_.emplace_back(scope, text(p));
+        else
+          scopes_[scope].names[text(p)].other = true;
+      } else if (t == "member_expression" || t == "subscript_expression") {
+        walk(p, scope, owner, cls);
       } else if (t == "assignment_pattern") {
         stack.emplace_back(field(p, "right"), true);
         stack.emplace_back(field(p, "left"), false);
@@ -182,6 +194,25 @@ class Resolver {
     if (t == "variable_declarator") {
       bind_pattern(field(n, "name"), scope, owner, cls);
       walk(field(n, "value"), scope, owner, cls);
+      return true;
+    }
+    if (t == "for_in_statement") {
+      walk(field(n, "right"), scope, owner, cls);
+      walk(field(n, "value"), scope, owner, cls);
+      bind_pattern(field(n, "left"), scope, owner, cls,
+                   ts_node_is_null(field(n, "kind")));
+      walk(field(n, "body"), scope, owner, cls);
+      return true;
+    }
+    if (t == "catch_clause") {
+      bind_pattern(field(n, "parameter"), scope, owner, cls);
+      walk(field(n, "body"), scope, owner, cls);
+      return true;
+    }
+    if (t == "assignment_expression" ||
+        t == "augmented_assignment_expression") {
+      bind_pattern(field(n, "left"), scope, owner, cls, true);
+      walk(field(n, "right"), scope, owner, cls);
       return true;
     }
     if (t == "import_specifier" || t == "namespace_import" ||
