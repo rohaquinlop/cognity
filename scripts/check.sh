@@ -156,6 +156,10 @@ cmd_lint() {
 
   local filter tmp
   filter=$(line_filter_json "$base" "${changed[@]}")
+  if [ "$filter" = "[]" ]; then
+    log "lint: only deleted lines; nothing to check"
+    return 0
+  fi
   tmp=$(mktemp -d)
   log "lint: ${#changed[@]} changed file(s), ${#tus[@]} translation unit(s)"
   local pids=() i=0
