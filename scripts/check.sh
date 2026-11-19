@@ -12,6 +12,7 @@
 #   BUILD_TYPE  CMake build type (default: Debug)
 #   CHECK_BASE  ref that lint compares against via merge-base
 #               (default: origin/main)
+#   JOBS        max parallel clang-tidy processes (default: CPU count)
 #   CLANG_FORMAT, CLANG_TIDY  override the pinned uvx tools
 set -euo pipefail
 
@@ -22,6 +23,7 @@ source scripts/lib/tools.sh
 
 BUILD_DIR=${BUILD_DIR:-build/check}
 BUILD_TYPE=${BUILD_TYPE:-Debug}
+JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 ENV_FAIL=3
 CXX_RE='\.(c|cc|cpp|cxx|h|hh|hpp)$'
 
@@ -162,27 +164,36 @@ cmd_lint() {
   fi
   tmp=$(mktemp -d)
   log "lint: ${#changed[@]} changed file(s), ${#tus[@]} translation unit(s)"
-  local pids=() i=0
+  local pids=() i=0 next=0 fail=0
   for f in "${tus[@]}"; do
     clang_tidy -p "$BUILD_DIR" --quiet --warnings-as-errors='*' \
       --line-filter="$filter" "$f" >"$tmp/$i.log" 2>&1 &
     pids+=($!)
     i=$((i + 1))
-  done
-  local fail=0
-  for i in "${!pids[@]}"; do
-    if ! wait "${pids[$i]}"; then
-      fail=1
-      grep -v -E '^[0-9]+ warnings? (and [0-9]+ errors? )?generated\.$' \
-        "$tmp/$i.log" >&2 || true
+    if [ $((i - next)) -ge "$JOBS" ]; then
+      reap_tidy "$tmp" "${pids[$next]}" "$next" || fail=1
+      next=$((next + 1))
     fi
+  done
+  while [ $next -lt $i ]; do
+    reap_tidy "$tmp" "${pids[$next]}" "$next" || fail=1
+    next=$((next + 1))
   done
   rm -rf "$tmp"
   return $fail
 }
 
+reap_tidy() {
+  if wait "$2"; then
+    return 0
+  fi
+  grep -v -E '^[0-9]+ warnings? (and [0-9]+ errors? )?generated\.$' \
+    "$1/$3.log" >&2 || true
+  return 1
+}
+
 usage() {
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 case "${1:-}" in
