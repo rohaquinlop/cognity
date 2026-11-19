@@ -262,7 +262,7 @@ void CLikeGSGBuilder::build_block_children(TSNode n, const string& src,
       collect_lambdas_in_node(ts_node_child_by_field_name(s, "condition", 9),
                               src, out);
     } else if (ty == "return_statement" || ty == "expression_statement" ||
-               ty == "declaration") {
+               ty == "declaration" || ty == "throw_statement") {
       collect_lambdas_in_node(s, src, out);
     }
     if (ty == "if_statement")
@@ -311,6 +311,8 @@ void CLikeGSGBuilder::build_if(TSNode n, const string& src,
   if (ts_node_named_child_count(alt) == 1) {
     TSNode only = ts_node_named_child(alt, 0);
     if (t(only) == "if_statement") {
+      collect_lambdas_in_node(ts_node_child_by_field_name(only, "condition", 9),
+                              src, out);
       build_if(only, src, out, GSGNodeKind::ElseIf);
       return;
     }

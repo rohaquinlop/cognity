@@ -186,6 +186,7 @@ int main() {
     {"tests/src/cpp/test_if.cpp", 8},
     {"tests/src/cpp/test_operator.cpp", 3},
     {"tests/src/cpp/test_lambda.cpp", 6},
+    {"tests/src/cpp/test_lambda_sites.cpp", 6},
     {"tests/src/cpp/test_ctor_dtor.cpp", 2},
     {"tests/src/cpp/test_method_out_of_class.cpp", 2},
     {"tests/src/cpp/test_template_method.cpp", 2},
