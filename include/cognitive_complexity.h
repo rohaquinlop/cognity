@@ -11,15 +11,6 @@
 
 #include "./gsg.h"
 
-extern "C" {
-const TSLanguage* tree_sitter_python();
-const TSLanguage* tree_sitter_javascript();
-const TSLanguage* tree_sitter_typescript();
-const TSLanguage* tree_sitter_tsx();
-const TSLanguage* tree_sitter_c();
-const TSLanguage* tree_sitter_cpp();
-}
-
 struct LineComplexity {
   unsigned int row;
   unsigned int start_col;

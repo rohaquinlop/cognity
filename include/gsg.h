@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-// Supported languages (extensible)
+// Supported languages. Unknown must stay last: it is the registry size.
 enum class Language {
   Python,
   C,
@@ -78,7 +78,5 @@ struct IBuilder {
     return {};
   }
 };
-
-std::unique_ptr<IBuilder> make_builder(Language lang);
 
 #endif

@@ -7,6 +7,7 @@
 #include "../include/cognitive_complexity.h"
 #include "../include/config.h"
 #include "../include/file_operations.h"
+#include "../include/languages.h"
 #include "../include/output.h"
 #include "../include/sourcing.h"
 
@@ -56,9 +57,10 @@ int main(int argc, char** argv) {
   std::vector<report::Row> all_rows;
 
   for (std::string& path : files) {
-    Language lang = detect_language_from_path(path);
-    set_ts_language_for_file(parser, lang, path);
-    if (lang == Language::Unknown) continue;
+    Language lang = language_from_path(path);
+    const LanguageInfo* info = language_info(lang);
+    if (info == nullptr) continue;
+    ts_parser_set_language(parser, info->grammar(path));
     try {
       source_code = load_file_content(path);
     } catch (const std::runtime_error& e) {
