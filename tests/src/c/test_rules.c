@@ -95,3 +95,16 @@ void r_break_continue(int n) {
     break;
   }
 }
+
+int r_labeled_while(int x) {
+start:
+  while (x) {
+    x--;
+  }
+  return 0;
+}
+
+int r_bool_in_declaration(int a, int b) {
+  int x = a && b;
+  return x;
+}

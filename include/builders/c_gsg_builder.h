@@ -41,16 +41,14 @@ class CLikeGSGBuilder : public IBuilder {
   GSGNode build_for(TSNode n, const std::string& src);
   GSGNode build_do_while(TSNode n, const std::string& src);
 
-  static void collect_expr(TSNode n, const std::string& src, GSGNode& into);
-  static bool collect_special(TSNode n, const std::string& src, GSGNode& into);
-  static void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,
-                        const std::string& src);
-  static void push_header(GSGNode& stmt, TSNode expr, const std::string& src);
+  void collect_expr(TSNode n, const std::string& src, GSGNode& into);
+  bool collect_special(TSNode n, const std::string& src, GSGNode& into,
+                       bool is_root);
+  void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,
+                 const std::string& src);
+  void push_header(GSGNode& stmt, TSNode expr, const std::string& src);
 
-  // lambdas
-  static void collect_lambdas_in_node(TSNode n, const std::string& src,
-                                      std::vector<GSGNode>& out);
-  static GSGNode build_lambda(TSNode n, const std::string& src);
+  GSGNode build_lambda(TSNode n, const std::string& src);
 };
 
 #endif

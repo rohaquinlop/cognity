@@ -1420,6 +1420,12 @@ static std::vector<RuleCase> rule_cases() {
     {"r_arrow_nesting", 2},
     {"r_nested_function", 2},
     {"m", 1},
+    {"r_unbraced_nested_if", 3},
+    {"r_unbraced_loop_body", 3},
+    {"r_local_class", 2},
+    {"r_object_method", 2},
+    {"r_arrow_in_declaration", 2},
+    {"r_bool_in_declaration", 1},
   });
   return {
     {.path = "tests/src/python/test_rules.py",
@@ -1440,7 +1446,11 @@ static std::vector<RuleCase> rule_cases() {
      .functions = js_ts},
     {.path = "tests/src/c/test_rules.c",
      .lang = Language::C,
-     .functions = with({{"r_do_while", 1}})},
+     .functions = with({
+       {"r_do_while", 1},
+       {"r_labeled_while", 1},
+       {"r_bool_in_declaration", 1},
+     })},
     {.path = "tests/src/cpp/test_rules.cpp",
      .lang = Language::Cpp,
      .functions = with({
@@ -1449,6 +1459,10 @@ static std::vector<RuleCase> rule_cases() {
        {"r_lambda_nesting", 2},
        {"r_range_for", 3},
        {"K::m", 1},
+       {"r_labeled_while", 1},
+       {"r_bool_in_declaration", 1},
+       {"r_local_struct", 2},
+       {"r_lambda_in_ternary", 4},
      })},
   };
 }
