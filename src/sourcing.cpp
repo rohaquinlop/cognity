@@ -27,7 +27,6 @@ Language detect_language_from_path(const std::string& path) {
   if (ends_with(".js") || ends_with(".mjs") || ends_with(".cjs"))
     return Language::JavaScript;
   if (ends_with(".ts") || ends_with(".tsx")) return Language::TypeScript;
-  if (ends_with(".java")) return Language::Java;
   return Language::Unknown;
 }
 

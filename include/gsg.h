@@ -15,7 +15,6 @@ enum class Language {
   Cpp,
   JavaScript,
   TypeScript,
-  Java,
   Unknown,
 };
 

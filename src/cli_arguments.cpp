@@ -67,7 +67,6 @@ static Language language_from_token(std::string tok) {
   if (tok == "c") return Language::C;
   if (tok == "cpp" || tok == "c++" || tok == "cc" || tok == "cxx")
     return Language::Cpp;
-  if (tok == "java") return Language::Java;
   return Language::Unknown;
 }
 
