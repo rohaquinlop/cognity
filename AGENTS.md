@@ -53,7 +53,7 @@ file → sourcing.cpp (language by extension, .gitignore, excludes)
 - `tests/test_complexity.cpp` has three tables:
   - `file_totals` (in `main()`): each fixture's expected **total** complexity, with its language.
   - `rule_cases()`: the rule fixtures `tests/src/<lang>/test_rules.<ext>`, one function per rule, with the expected score **per function**. A function that is missing, unexpected, duplicated or wrongly scored fails the test.
-  - `coverage_cases()`: the coverage gate. For each language it reads the statement types from the grammar's `node-types.json` (statement supertypes, expanded) and puts each one in `mapped` (the builder has a rule for it) or `no_score` (it has none). A type in neither list, in both, or not in the grammar fails the test. Only statement supertype members go in the lists. A new language adds a row.
+  - `coverage_cases()`: the coverage gate. For each language it reads the statement types from the grammar's `node-types.json` (statement supertypes, expanded) and puts each one in `mapped` (the builder has a rule for it) or `no_score` (it has none). A type in neither list, in both, or not in the grammar fails the test. Only statement supertype members go in the lists. The lists are kept by hand: the gate checks that they cover the grammar, not what the builder does. A new language adds a row here, its grammar to the `foreach(PAIR ...)` list in `CMakeLists.txt`, and its `COGNITY_NODE_TYPES_*` macro in the row.
 - Fixtures live in `tests/src/<lang>/`. They are analyzer inputs:
   - Never edit a fixture to make a test pass.
   - Never format them (`tests/src/.clang-format` disables formatting).
