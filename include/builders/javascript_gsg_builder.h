@@ -16,7 +16,10 @@ class JavaScriptGSGBuilder : public IBuilder {
   static std::string_view slice(const std::string& src, TSNode n);
   static std::string_view name_of(TSNode n, const std::string& src);
 
+  void build_top_level(TSNode n, const std::string& src,
+                       std::vector<GSGNode>& funcs);
   GSGNode build_function(TSNode n, const std::string& src);
+  GSGNode build_function_expr(TSNode n, const std::string& src);
   void build_block_children(TSNode n, const std::string& src,
                             std::vector<GSGNode>& out);
   void build_if(TSNode n, const std::string& src, std::vector<GSGNode>& out,

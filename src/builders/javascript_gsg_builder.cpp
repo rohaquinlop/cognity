@@ -61,6 +61,32 @@ static bool js_is_bool(TSNode n) {
   return op == "&&" || op == "||";
 }
 
+static bool js_is_function_expr(TSNode n) {
+  if (ts_node_is_null(n)) return false;
+  string ty = t(n);
+  return ty == "arrow_function" || ty == "function_expression" ||
+         ty == "generator_function";
+}
+
+GSGNode JavaScriptGSGBuilder::build_function_expr(TSNode n, const string& src) {
+  GSGNode fn;
+  fn.kind = GSGNodeKind::Function;
+  fn.loc = loc(n);
+  GSGNode defaults;
+  defaults.kind = GSGNodeKind::Header;
+  defaults.loc = loc(n);
+  collect_defaults(ts_node_child_by_field_name(n, "parameters", 10), src,
+                   defaults);
+  if (defaults.addl_cost || !defaults.children.empty())
+    fn.children.emplace_back(std::move(defaults));
+  TSNode body = ts_node_child_by_field_name(n, "body", 4);
+  if (!ts_node_is_null(body) && t(body) == "statement_block")
+    build_block_children(body, src, fn.children);
+  else
+    push_expr(fn.children, n, body, src);
+  return fn;
+}
+
 void JavaScriptGSGBuilder::collect_defaults(TSNode params, const string& src,
                                             GSGNode& into) {
   uint32_t m = ts_node_is_null(params) ? 0 : ts_node_named_child_count(params);
@@ -118,24 +144,8 @@ void JavaScriptGSGBuilder::collect_expr(TSNode root, const string& src,
 bool JavaScriptGSGBuilder::collect_special(TSNode n, const string& src,
                                            GSGNode& into) {
   string ty = t(n);
-  if (ty == "arrow_function" || ty == "function_expression" ||
-      ty == "generator_function") {
-    GSGNode fn;
-    fn.kind = GSGNodeKind::Function;
-    fn.loc = loc(n);
-    GSGNode defaults;
-    defaults.kind = GSGNodeKind::Header;
-    defaults.loc = loc(n);
-    collect_defaults(ts_node_child_by_field_name(n, "parameters", 10), src,
-                     defaults);
-    if (defaults.addl_cost || !defaults.children.empty())
-      fn.children.emplace_back(std::move(defaults));
-    TSNode body = ts_node_child_by_field_name(n, "body", 4);
-    if (!ts_node_is_null(body) && t(body) == "statement_block")
-      build_block_children(body, src, fn.children);
-    else
-      collect_expr(body, src, fn);
-    into.children.emplace_back(std::move(fn));
+  if (js_is_function_expr(n)) {
+    into.children.emplace_back(build_function_expr(n, src));
     return true;
   }
   if (ty == "ternary_expression") {
@@ -175,23 +185,45 @@ std::vector<GSGNode> JavaScriptGSGBuilder::build_functions(TSNode root,
                                                            const string& src) {
   std::vector<GSGNode> funcs;
   int n = ts_node_named_child_count(root);
-  for (int i = 0; i < n; ++i) {
-    TSNode ch = ts_node_named_child(root, i);
-    string ty = t(ch);
-    if (ty == "function_declaration") {
-      funcs.emplace_back(build_function(ch, src));
-    } else if (ty == "class_declaration") {
-      TSNode body = ts_node_child_by_field_name(ch, "body", 4);
-      int m = ts_node_named_child_count(body);
-      for (int j = 0; j < m; ++j) {
-        TSNode mem = ts_node_named_child(body, j);
-        if (t(mem) == "method_definition") {
-          funcs.emplace_back(build_function(mem, src));
-        }
+  for (int i = 0; i < n; ++i)
+    build_top_level(ts_node_named_child(root, i), src, funcs);
+  return funcs;
+}
+
+void JavaScriptGSGBuilder::build_top_level(TSNode ch, const string& src,
+                                           std::vector<GSGNode>& funcs) {
+  if (ts_node_is_null(ch)) return;
+  string ty = t(ch);
+  if (ty == "function_declaration") {
+    funcs.emplace_back(build_function(ch, src));
+  } else if (ty == "class_declaration") {
+    TSNode body = ts_node_child_by_field_name(ch, "body", 4);
+    uint32_t m = ts_node_named_child_count(body);
+    for (uint32_t j = 0; j < m; ++j) {
+      TSNode mem = ts_node_named_child(body, j);
+      if (t(mem) == "method_definition") {
+        funcs.emplace_back(build_function(mem, src));
       }
     }
+  } else if (ty == "export_statement") {
+    build_top_level(ts_node_child_by_field_name(ch, "declaration", 11), src,
+                    funcs);
+  } else if (ty == "lexical_declaration" || ty == "variable_declaration") {
+    uint32_t m = ts_node_named_child_count(ch);
+    for (uint32_t j = 0; j < m; ++j) {
+      TSNode decl = ts_node_named_child(ch, j);
+      if (t(decl) != "variable_declarator") continue;
+      TSNode name = ts_node_child_by_field_name(decl, "name", 4);
+      TSNode value =
+        js_unwrap_parens(ts_node_child_by_field_name(decl, "value", 5));
+      if (ts_node_is_null(name) || t(name) != "identifier" ||
+          !js_is_function_expr(value))
+        continue;
+      GSGNode fn = build_function_expr(value, src);
+      fn.name = string(slice(src, name));
+      funcs.emplace_back(std::move(fn));
+    }
   }
-  return funcs;
 }
 
 GSGNode JavaScriptGSGBuilder::build_function(TSNode n, const string& src) {
