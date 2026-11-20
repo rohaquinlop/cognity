@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -225,6 +227,14 @@ static string_view js_text(const string& src, TSNode n) {
   return string_view(src).substr(a, ts_node_end_byte(n) - a);
 }
 
+static constexpr std::array<string_view, 3> kJsUnitChildren = {
+  "statement_block", "else_clause", "switch_body"};
+
+static constexpr std::array<string_view, 9> kJsUnitBody = {
+  "catch_clause",      "finally_clause",  "for_statement",
+  "for_in_statement",  "while_statement", "do_statement",
+  "labeled_statement", "with_statement",  "switch_statement"};
+
 static bool js_is_member_chain(TSNode n) {
   while (!ts_node_is_null(n) && t(n) == "member_expression")
     n = js_field(n, "object");
@@ -283,9 +293,10 @@ void JavaScriptGSGBuilder::collect_units(TSNode n, const string& src,
         collect_value(js_field(e, "right"), src,
                       js_qualify(qual, js_dotted(slice(src, left))), funcs);
     }
-  } else if (ty == "statement_block" || ty == "else_clause" ||
-             ty == "switch_body") {
+  } else if (std::ranges::find(kJsUnitChildren, ty) != kJsUnitChildren.end()) {
     collect_children(n, src, qual, funcs);
+  } else if (std::ranges::find(kJsUnitBody, ty) != kJsUnitBody.end()) {
+    collect_units(js_field(n, "body"), src, qual, funcs);
   } else if (ty == "if_statement") {
     collect_units(js_field(n, "consequence"), src, qual, funcs);
     collect_units(js_field(n, "alternative"), src, qual, funcs);
@@ -300,12 +311,6 @@ void JavaScriptGSGBuilder::collect_units(TSNode n, const string& src,
       TSNode ch = ts_node_named_child(n, j);
       if (!ts_node_eq(ch, value)) collect_units(ch, src, qual, funcs);
     }
-  } else if (ty == "catch_clause" || ty == "finally_clause" ||
-             ty == "for_statement" || ty == "for_in_statement" ||
-             ty == "while_statement" || ty == "do_statement" ||
-             ty == "labeled_statement" || ty == "with_statement" ||
-             ty == "switch_statement") {
-    collect_units(js_field(n, "body"), src, qual, funcs);
   }
 }
 
