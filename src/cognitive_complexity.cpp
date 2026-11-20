@@ -1,8 +1,6 @@
 #include "../include/cognitive_complexity.h"
-#include "../include/builders/c_gsg_builder.h"
-#include "../include/builders/javascript_gsg_builder.h"
-#include "../include/builders/python_gsg_builder.h"
 #include "../include/gsg.h"
+#include "../include/languages.h"
 
 #include <algorithm>
 #include <ranges>
@@ -73,22 +71,6 @@ compute_cognitive_complexity_gsg(const GSGNode& node, int nesting_level) {
   return {complexity, lines};
 }
 
-std::unique_ptr<IBuilder> make_builder(Language lang) {
-  switch (lang) {
-    case Language::Python:
-      return std::make_unique<PythonGSGBuilder>();
-    case Language::JavaScript:
-      return std::make_unique<JavaScriptGSGBuilder>();
-    case Language::TypeScript:
-      return std::make_unique<JavaScriptGSGBuilder>();
-    case Language::C:
-    case Language::Cpp:
-      return std::make_unique<CLikeGSGBuilder>(lang == Language::Cpp);
-    default:
-      return nullptr;
-  }
-}
-
 std::vector<FunctionComplexity> functions_complexity_file(
   const std::string& source_code, TSParser* parser, Language lang) {
   std::vector<FunctionComplexity> functions;
@@ -97,12 +79,13 @@ std::vector<FunctionComplexity> functions_complexity_file(
                                         strlen(source_code.c_str()));
   TSNode root_node = ts_tree_root_node(tree);
 
-  auto builder = make_builder(lang);
-  if (!builder) {
+  const LanguageInfo* info = language_info(lang);
+  if (info == nullptr) {
     ts_tree_delete(tree);
     return functions;
   }
 
+  auto builder = info->make_builder();
   auto func_nodes = builder->build_functions(root_node, source_code);
   auto recursive = builder->recursive_defs(root_node, source_code);
   std::ranges::sort(recursive, {}, &RecursiveDef::def_start_byte);

@@ -10,16 +10,8 @@
 #include "../include/builders/javascript_gsg_builder.h"
 #include "../include/builders/python_gsg_builder.h"
 #include "../include/cognitive_complexity.h"
+#include "../include/languages.h"
 #include "../include/recursion.h"
-
-extern "C" {
-const TSLanguage* tree_sitter_python();
-const TSLanguage* tree_sitter_javascript();
-const TSLanguage* tree_sitter_typescript();
-const TSLanguage* tree_sitter_tsx();
-const TSLanguage* tree_sitter_c();
-const TSLanguage* tree_sitter_cpp();
-}
 
 static std::string read_file(const std::filesystem::path& p) {
   std::ifstream ifs(p, std::ios::binary);
@@ -29,33 +21,12 @@ static std::string read_file(const std::filesystem::path& p) {
   return data;
 }
 
-static std::vector<FunctionComplexity> analyze_source(const std::string& src,
-                                                      Language lang,
-                                                      bool tsx = false) {
+static std::vector<FunctionComplexity> analyze_source(
+  const std::string& src, Language lang, std::string_view path = "") {
+  const LanguageInfo* info = language_info(lang);
+  if (info == nullptr) return {};
   TSParser* parser = ts_parser_new();
-  switch (lang) {
-    case Language::Python:
-      ts_parser_set_language(parser, tree_sitter_python());
-      break;
-    case Language::JavaScript:
-    case Language::TypeScript:
-      // TS code uses the TypeScript grammar; JS uses JS grammar
-      if (lang == Language::JavaScript)
-        ts_parser_set_language(parser, tree_sitter_javascript());
-      else
-        ts_parser_set_language(
-          parser, tsx ? tree_sitter_tsx() : tree_sitter_typescript());
-      break;
-    case Language::C:
-      ts_parser_set_language(parser, tree_sitter_c());
-      break;
-    case Language::Cpp:
-      ts_parser_set_language(parser, tree_sitter_cpp());
-      break;
-    default:
-      ts_parser_delete(parser);
-      return {};
-  }
+  ts_parser_set_language(parser, info->grammar(path));
   auto fns = functions_complexity_file(src, parser, lang);
   ts_parser_delete(parser);
   return fns;
@@ -67,8 +38,7 @@ static std::vector<FunctionComplexity> analyze_file(
   // location to find the repository root regardless of current working dir.
   static const std::filesystem::path project_root =
     std::filesystem::path(__FILE__).parent_path().parent_path();
-  return analyze_source(read_file(project_root / rel), lang,
-                        rel.extension() == ".tsx");
+  return analyze_source(read_file(project_root / rel), lang, rel.string());
 }
 
 static unsigned int total(const std::vector<FunctionComplexity>& fns) {
@@ -1784,7 +1754,8 @@ int main() {
     for (int i = 0; i < 20000; ++i) deep += "+a";
     deep += '\n';
     TSParser* parser = ts_parser_new();
-    ts_parser_set_language(parser, tree_sitter_python());
+    ts_parser_set_language(parser,
+                           language_info(Language::Python)->grammar(""));
     TSTree* tree = ts_parser_parse_string(parser, nullptr, deep.c_str(),
                                           static_cast<uint32_t>(deep.size()));
     if (PythonGSGBuilder()
@@ -1803,7 +1774,8 @@ int main() {
     for (int i = 0; i < 20000; ++i) deep += "+a";
     deep += ";\n}\n";
     TSParser* parser = ts_parser_new();
-    ts_parser_set_language(parser, tree_sitter_javascript());
+    ts_parser_set_language(parser,
+                           language_info(Language::JavaScript)->grammar(""));
     TSTree* tree = ts_parser_parse_string(parser, nullptr, deep.c_str(),
                                           static_cast<uint32_t>(deep.size()));
     if (JavaScriptGSGBuilder()
@@ -1843,6 +1815,58 @@ int main() {
     auto found = recursive_defs_from_graph({0, 1}, self);
     if (found.size() != 1 || found[0].call.row != 4) {
       std::cerr << "Recursion: self call not reported on its first call row\n";
+      ok = false;
+    }
+  }
+
+  const std::vector<std::pair<std::string_view, Language>> tokens = {
+    {"py", Language::Python},
+    {"python", Language::Python},
+    {"PY", Language::Python},
+    {"c", Language::C},
+    {"cpp", Language::Cpp},
+    {"c++", Language::Cpp},
+    {"C++", Language::Cpp},
+    {"cc", Language::Cpp},
+    {"cxx", Language::Cpp},
+    {"js", Language::JavaScript},
+    {"javascript", Language::JavaScript},
+    {"ts", Language::TypeScript},
+    {"typescript", Language::TypeScript},
+    {"tsx", Language::TypeScript},
+    {"java", Language::Unknown},
+    {"rs", Language::Unknown},
+  };
+  for (const auto& [tok, exp] : tokens) {
+    if (language_from_token(tok) != exp) {
+      std::cerr << "Registry: token '" << tok << "' maps wrong\n";
+      ok = false;
+    }
+  }
+  const std::vector<std::pair<std::string_view, Language>> paths = {
+    {"a.py", Language::Python},      {"a.c", Language::C},
+    {"a.cpp", Language::Cpp},        {"a.cc", Language::Cpp},
+    {"a.cxx", Language::Cpp},        {"a.js", Language::JavaScript},
+    {"a.mjs", Language::JavaScript}, {"a.cjs", Language::JavaScript},
+    {"a.ts", Language::TypeScript},  {"a.tsx", Language::TypeScript},
+    {"a.java", Language::Unknown},   {"a.rs", Language::Unknown},
+  };
+  for (const auto& [path, exp] : paths) {
+    if (language_from_path(path) != exp) {
+      std::cerr << "Registry: path '" << path << "' maps wrong\n";
+      ok = false;
+    }
+  }
+  if (language_info(Language::Unknown) != nullptr ||
+      language_info(Language::Count) != nullptr) {
+    std::cerr << "Registry: Unknown or Count has an entry\n";
+    ok = false;
+  }
+  for (Language lang : {Language::Python, Language::C, Language::Cpp,
+                        Language::JavaScript, Language::TypeScript}) {
+    const LanguageInfo* info = language_info(lang);
+    if (info == nullptr || info->id != lang) {
+      std::cerr << "Registry: language_info returns the wrong entry\n";
       ok = false;
     }
   }

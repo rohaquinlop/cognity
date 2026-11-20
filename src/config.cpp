@@ -9,6 +9,7 @@
 
 #include "../include/config.h"
 #include "../include/gsg.h"
+#include "../include/languages.h"
 
 using std::string;
 
@@ -105,24 +106,11 @@ static std::vector<string> split_csv(const string& s) {
   return out;
 }
 
-static Language language_from_token(string tok) {
-  tok = to_lower(trim(tok));
-  if (tok == "py" || tok == "python") return Language::Python;
-  if (tok == "js" || tok == "javascript") return Language::JavaScript;
-  if (tok == "ts" || tok == "typescript" || tok == "tsx")
-    return Language::TypeScript;
-  if (tok == "c") return Language::C;
-  if (tok == "cpp" || tok == "c++" || tok == "cc" || tok == "cxx")
-    return Language::Cpp;
-  if (tok == "java") return Language::Java;
-  return Language::Unknown;
-}
-
 static void parse_languages_list(const string& value,
                                  std::vector<Language>& out) {
   auto toks = split_csv(value);
   for (auto& tok : toks) {
-    Language lang = language_from_token(tok);
+    Language lang = language_from_token(trim(tok));
     if (lang != Language::Unknown &&
         std::find(out.begin(), out.end(), lang) == out.end())
       out.push_back(lang);
@@ -317,7 +305,7 @@ LoadedConfig load_cognity_toml(const std::string& filepath) {
       }
       cfg.args.languages.clear();
       for (auto& tok : vals) {
-        Language l = language_from_token(tok);
+        Language l = language_from_token(trim(tok));
         if (l != Language::Unknown &&
             std::find(cfg.args.languages.begin(), cfg.args.languages.end(),
                       l) == cfg.args.languages.end()) {

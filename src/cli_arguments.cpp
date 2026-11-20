@@ -4,6 +4,7 @@
 
 #include "../include/cli_arguments.h"
 #include "../include/gsg.h"
+#include "../include/languages.h"
 
 std::vector<std::string> args_to_string(char** args, int total) {
   std::vector<std::string> strings;
@@ -55,20 +56,6 @@ bool is_argument(std::string& s) {
          is_detail(s) or is_sort(s) or is_output_csv(s) or is_output_json(s) ||
          is_lang(s) || is_exclude(s) || is_max_fn_width(s) || is_help(s) ||
          is_version(s);
-}
-
-static Language language_from_token(std::string tok) {
-  std::transform(tok.begin(), tok.end(), tok.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  if (tok == "py" || tok == "python") return Language::Python;
-  if (tok == "js" || tok == "javascript") return Language::JavaScript;
-  if (tok == "ts" || tok == "typescript") return Language::TypeScript;
-  if (tok == "tsx") return Language::TypeScript;
-  if (tok == "c") return Language::C;
-  if (tok == "cpp" || tok == "c++" || tok == "cc" || tok == "cxx")
-    return Language::Cpp;
-  if (tok == "java") return Language::Java;
-  return Language::Unknown;
 }
 
 static void parse_languages_list(const std::string& value,

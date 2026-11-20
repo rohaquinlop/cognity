@@ -4,32 +4,8 @@
 #include <vector>
 
 #include "../include/gitignore.h"
+#include "../include/languages.h"
 #include "../include/sourcing.h"
-
-extern "C" {
-const TSLanguage* tree_sitter_python();
-const TSLanguage* tree_sitter_javascript();
-const TSLanguage* tree_sitter_typescript();
-const TSLanguage* tree_sitter_tsx();
-const TSLanguage* tree_sitter_c();
-const TSLanguage* tree_sitter_cpp();
-}
-
-Language detect_language_from_path(const std::string& path) {
-  auto ends_with = [&](const char* suf) {
-    size_t n = strlen(suf);
-    return path.size() >= n && path.compare(path.size() - n, n, suf) == 0;
-  };
-  if (ends_with(".py")) return Language::Python;
-  if (ends_with(".c")) return Language::C;
-  if (ends_with(".cpp") || ends_with(".cc") || ends_with(".cxx"))
-    return Language::Cpp;
-  if (ends_with(".js") || ends_with(".mjs") || ends_with(".cjs"))
-    return Language::JavaScript;
-  if (ends_with(".ts") || ends_with(".tsx")) return Language::TypeScript;
-  if (ends_with(".java")) return Language::Java;
-  return Language::Unknown;
-}
 
 static bool language_is_selected(Language lang,
                                  const std::vector<Language>& filter) {
@@ -108,7 +84,7 @@ static void collect_dir_with_gitignore(
         }
       }
       if (skip_file) continue;
-      Language lang = detect_language_from_path(fpath);
+      Language lang = language_from_path(fpath);
       if (lang == Language::Unknown) continue;
       if (!language_is_selected(lang, filter)) continue;
       out.push_back(fpath);
@@ -167,39 +143,11 @@ void collect_source_files(const std::vector<std::string>& inputs,
         }
       }
       if (skip) continue;
-      Language lang = detect_language_from_path(p);
+      Language lang = language_from_path(p);
       if (lang != Language::Unknown && language_is_selected(lang, filter))
         out.push_back(p);
     } else {
       // Ignore non-existing inputs silently
     }
-  }
-}
-
-void set_ts_language_for_file(TSParser* parser, Language lang,
-                              const std::string& path) {
-  switch (lang) {
-    case Language::Python:
-      ts_parser_set_language(parser, tree_sitter_python());
-      break;
-    case Language::JavaScript:
-      ts_parser_set_language(parser, tree_sitter_javascript());
-      break;
-    case Language::C:
-      ts_parser_set_language(parser, tree_sitter_c());
-      break;
-    case Language::Cpp:
-      ts_parser_set_language(parser, tree_sitter_cpp());
-      break;
-    case Language::TypeScript: {
-      if (path.size() >= 4 && path.rfind(".tsx") == path.size() - 4) {
-        ts_parser_set_language(parser, tree_sitter_tsx());
-      } else {
-        ts_parser_set_language(parser, tree_sitter_typescript());
-      }
-      break;
-    }
-    default:
-      break;
   }
 }

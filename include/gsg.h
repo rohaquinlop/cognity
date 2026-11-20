@@ -8,15 +8,15 @@
 #include <string>
 #include <vector>
 
-// Supported languages (extensible)
+// Supported languages. Add new values between Unknown and Count.
 enum class Language {
+  Unknown,
   Python,
   C,
   Cpp,
   JavaScript,
   TypeScript,
-  Java,
-  Unknown,
+  Count,
 };
 
 // General Syntax Graph node kinds
@@ -79,7 +79,5 @@ struct IBuilder {
     return {};
   }
 };
-
-std::unique_ptr<IBuilder> make_builder(Language lang);
 
 #endif
