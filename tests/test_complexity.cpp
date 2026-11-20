@@ -1458,6 +1458,7 @@ static std::vector<RuleCase> rule_cases() {
        {"r_if_else_directive", 6},
        {"r_elif_bool", 7},
        {"r_if_directive_bool", 5},
+       {"r_elifdef", 6},
      })},
     {.path = "tests/src/cpp/test_rules.cpp",
      .lang = Language::Cpp,

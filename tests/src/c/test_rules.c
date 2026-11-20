@@ -161,3 +161,16 @@ int r_if_directive_bool(int x) {
 #endif
   return 0;
 }
+
+int r_elifdef(int x) {
+#ifdef A
+  if (x) {
+    return 1;
+  }
+#elifdef B
+  if (x) {
+    return 2;
+  }
+#endif
+  return 0;
+}
