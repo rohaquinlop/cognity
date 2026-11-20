@@ -14,43 +14,10 @@ static inline string node_type(TSNode n) {
   return string(ts_node_grammar_type(n));
 }
 
-SourceLoc PythonGSGBuilder::loc_from_node(TSNode node) {
-  TSPoint p = ts_node_start_point(node), q = ts_node_end_point(node);
-  return SourceLoc{.row = p.row,
-                   .start_col = p.column,
-                   .end_col = q.column,
-                   .start_byte = ts_node_start_byte(node),
-                   .end_byte = ts_node_end_byte(node)};
-}
-
-string_view PythonGSGBuilder::slice_source(const string& source, TSNode node) {
-  const uint32_t a = ts_node_start_byte(node);
-  const uint32_t b = ts_node_end_byte(node);
-  return string_view(source).substr(a, b - a);
-}
-
 string_view PythonGSGBuilder::get_identifier(TSNode node,
                                              const string& source) {
   TSNode name = ts_node_child_by_field_name(node, "name", 4);
-  return slice_source(source, name);
-}
-
-static TSNode unwrap_parens(TSNode node) {
-  while (!ts_node_is_null(node) &&
-         node_type(node) == "parenthesized_expression") {
-    TSNode only{};
-    uint32_t count = 0;
-    uint32_t m = ts_node_named_child_count(node);
-    for (uint32_t i = 0; i < m; ++i) {
-      TSNode ch = ts_node_named_child(node, i);
-      if (ts_node_is_extra(ch)) continue;
-      only = ch;
-      ++count;
-    }
-    if (count != 1) break;
-    node = only;
-  }
-  return node;
+  return slice(source, name);
 }
 
 void PythonGSGBuilder::collect_defaults(TSNode parameters, const string& source,
@@ -83,48 +50,14 @@ void PythonGSGBuilder::collect_definition_header(TSNode decorated, TSNode def,
                      into);
 }
 
-void PythonGSGBuilder::collect_expr(TSNode root, const string& source,
-                                    GSGNode& into) {
-  enum class Step : uint8_t { Expr, Operand, Op, ChainEnd };
-  std::vector<std::pair<TSNode, Step>> stack{{root, Step::Expr}};
-  std::vector<string> previous;
-  auto expand = [&stack](TSNode b) {
-    stack.emplace_back(ts_node_child_by_field_name(b, "right", 5),
-                       Step::Operand);
-    stack.emplace_back(b, Step::Op);
-    stack.emplace_back(ts_node_child_by_field_name(b, "left", 4),
-                       Step::Operand);
-  };
-  while (!stack.empty()) {
-    auto [n, step] = stack.back();
-    stack.pop_back();
-    if (step == Step::ChainEnd) {
-      previous.pop_back();
-    } else if (step == Step::Op) {
-      string op = node_type(ts_node_child_by_field_name(n, "operator", 8));
-      if (op != previous.back()) into.addl_cost += 1;
-      previous.back() = op;
-    } else if (step == Step::Operand) {
-      TSNode inner = unwrap_parens(n);
-      if (!ts_node_is_null(inner) && node_type(inner) == "boolean_operator")
-        expand(inner);
-      else
-        stack.emplace_back(n, Step::Expr);
-    } else if (ts_node_is_null(n)) {
-      continue;
-    } else if (node_type(n) == "boolean_operator") {
-      previous.emplace_back();
-      stack.emplace_back(n, Step::ChainEnd);
-      expand(n);
-    } else if (!collect_special(n, source, into)) {
-      for (uint32_t i = ts_node_named_child_count(n); i > 0; --i)
-        stack.emplace_back(ts_node_named_child(n, i - 1), Step::Expr);
-    }
-  }
-}
+PythonGSGBuilder::PythonGSGBuilder()
+    : ExprBuilderBase(ExprSpec{.paren_types = {"parenthesized_expression"},
+                               .bool_types = {"boolean_operator"},
+                               .and_ops = {"and"},
+                               .or_ops = {"or"}}) {}
 
 bool PythonGSGBuilder::collect_special(TSNode node, const string& source,
-                                       GSGNode& into) {
+                                       GSGNode& into, bool /*is_root*/) {
   string t = node_type(node);
   if (t == "lambda") {
     GSGNode fn = expr_node(GSGNodeKind::Function, node);
@@ -140,7 +73,7 @@ bool PythonGSGBuilder::collect_special(TSNode node, const string& source,
   if (t == "conditional_expression") {
     GSGNode tern;
     tern.kind = GSGNodeKind::Ternary;
-    tern.loc = loc_from_node(node);
+    tern.loc = loc(node);
     int part = 0;
     uint32_t m = ts_node_named_child_count(node);
     for (uint32_t i = 0; i < m; ++i) {
@@ -160,24 +93,8 @@ bool PythonGSGBuilder::collect_special(TSNode node, const string& source,
 GSGNode PythonGSGBuilder::expr_node(GSGNodeKind kind, TSNode loc_node) {
   GSGNode e;
   e.kind = kind;
-  e.loc = loc_from_node(loc_node);
+  e.loc = loc(loc_node);
   return e;
-}
-
-void PythonGSGBuilder::push_expr(std::vector<GSGNode>& out, TSNode loc_node,
-                                 TSNode expr, const string& source) {
-  GSGNode e = expr_node(GSGNodeKind::Expr, loc_node);
-  collect_expr(expr, source, e);
-  if (e.addl_cost || !e.children.empty()) out.emplace_back(std::move(e));
-}
-
-void PythonGSGBuilder::push_header(GSGNode& stmt, TSNode expr,
-                                   const string& source) {
-  if (ts_node_is_null(expr)) return;
-  GSGNode h = expr_node(GSGNodeKind::Header, expr);
-  collect_expr(expr, source, h);
-  if (h.addl_cost || !h.children.empty())
-    stmt.children.emplace_back(std::move(h));
 }
 
 void PythonGSGBuilder::push_else(TSNode else_clause, const string& source,
@@ -243,7 +160,7 @@ GSGNode PythonGSGBuilder::build_function(TSNode node, const string& source) {
   GSGNode f;
   f.kind = GSGNodeKind::Function;
   f.name = std::string(get_identifier(node, source));
-  f.loc = loc_from_node(node);
+  f.loc = loc(node);
   build_function_body(node, source, f.children);
   return f;
 }
@@ -277,7 +194,7 @@ bool PythonGSGBuilder::returns_inner(TSNode ret, string_view inner,
                                      const string& source) {
   auto is_inner = [&](TSNode e) {
     return !ts_node_is_null(e) && node_type(e) == "identifier" &&
-           slice_source(source, e) == inner;
+           slice(source, e) == inner;
   };
   std::vector<TSNode> parts = statements_of(ret);
   if (parts.size() != 1) return false;
