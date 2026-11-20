@@ -176,3 +176,27 @@ function r_bool_in_declaration(a, b) {
   let x = a && b;
   return x;
 }
+
+function r_labeled_continue(xs) {
+  outer: for (const x of xs) {
+    if (x) {
+      continue outer;
+    }
+  }
+}
+
+function r_labeled_break(xs) {
+  outer: for (const x of xs) {
+    if (x) {
+      break outer;
+    }
+  }
+}
+
+function r_labeled_block_break(a) {
+  block: {
+    if (a) {
+      break block;
+    }
+  }
+}

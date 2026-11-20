@@ -56,6 +56,9 @@ compute_cognitive_complexity_gsg(const GSGNode& node, int nesting_level) {
       add(1 + level + node.addl_cost);
       count_children(nesting_level + 1);
       break;
+    case GSGNodeKind::Jump:
+      add(1 + node.addl_cost);
+      break;
     case GSGNodeKind::Function:
     case GSGNodeKind::Case:
       add(node.addl_cost);

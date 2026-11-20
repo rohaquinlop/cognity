@@ -1426,6 +1426,9 @@ static std::vector<RuleCase> rule_cases() {
     {"r_object_method", 2},
     {"r_arrow_in_declaration", 2},
     {"r_bool_in_declaration", 1},
+    {"r_labeled_continue", 4},
+    {"r_labeled_break", 4},
+    {"r_labeled_block_break", 2},
   });
   return {
     {.path = "tests/src/python/test_rules.py",
@@ -1450,6 +1453,7 @@ static std::vector<RuleCase> rule_cases() {
        {"r_do_while", 1},
        {"r_labeled_while", 1},
        {"r_bool_in_declaration", 1},
+       {"r_goto", 2},
      })},
     {.path = "tests/src/cpp/test_rules.cpp",
      .lang = Language::Cpp,
@@ -1463,6 +1467,7 @@ static std::vector<RuleCase> rule_cases() {
        {"r_bool_in_declaration", 1},
        {"r_local_struct", 2},
        {"r_lambda_in_ternary", 4},
+       {"r_goto", 2},
      })},
   };
 }

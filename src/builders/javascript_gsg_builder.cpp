@@ -68,7 +68,8 @@ static bool js_is_statement(const string& ty) {
          ty == "try_statement" || ty == "statement_block" ||
          ty == "expression_statement" || ty == "return_statement" ||
          ty == "throw_statement" || ty == "lexical_declaration" ||
-         ty == "variable_declaration";
+         ty == "variable_declaration" || ty == "break_statement" ||
+         ty == "continue_statement";
 }
 
 static bool js_is_function_decl(const string& ty) {
@@ -351,6 +352,13 @@ void JavaScriptGSGBuilder::build_statement(TSNode s, const string& src,
     if (ts_node_is_null(arg) && ts_node_named_child_count(s) > 0)
       arg = ts_node_named_child(s, 0);
     if (!ts_node_is_null(arg)) push_expr(out, s, arg, src);
+  } else if (ty == "break_statement" || ty == "continue_statement") {
+    if (!ts_node_is_null(ts_node_child_by_field_name(s, "label", 5))) {
+      GSGNode j;
+      j.kind = GSGNodeKind::Jump;
+      j.loc = loc(s);
+      out.emplace_back(std::move(j));
+    }
   } else if (ty == "throw_statement") {
     TSNode arg = ts_node_child_by_field_name(s, "argument", 8);
     if (!ts_node_is_null(arg)) push_expr(out, s, arg, src);

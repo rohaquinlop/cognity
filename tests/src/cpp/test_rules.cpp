@@ -169,3 +169,12 @@ int r_lambda_in_ternary(int a, int b) {
     return 1;
   }() : 0;
 }
+
+void r_goto(int x) {
+  if (x) {
+    goto end;
+  }
+  x++;
+end:
+  return;
+}

@@ -286,7 +286,12 @@ void CLikeGSGBuilder::build_statement(TSNode s, const string& src,
     build_try(s, src, out);
   else if (ty == "compound_statement")
     build_block_children(s, src, out);
-  else if (ty == "expression_statement") {
+  else if (ty == "goto_statement") {
+    GSGNode j;
+    j.kind = GSGNodeKind::Jump;
+    j.loc = loc(s);
+    out.emplace_back(std::move(j));
+  } else if (ty == "expression_statement") {
     if (ts_node_named_child_count(s) > 0) {
       TSNode expr = ts_node_named_child(s, 0);
       push_expr(out, expr, expr, src);
@@ -376,7 +381,8 @@ static bool c_is_statement(const string& ty) {
          ty == "do_statement" || ty == "switch_statement" ||
          ty == "try_statement" || ty == "compound_statement" ||
          ty == "return_statement" || ty == "throw_statement" ||
-         ty == "declaration" || ty == "expression_statement";
+         ty == "declaration" || ty == "expression_statement" ||
+         ty == "goto_statement";
 }
 
 static string_view c_bool_op(TSNode n) {

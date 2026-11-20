@@ -44,6 +44,7 @@ enum class GSGNodeKind {
   Return,
   Break,
   Continue,
+  Jump,
   Unknown,
 };
 

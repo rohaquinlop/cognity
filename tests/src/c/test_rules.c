@@ -108,3 +108,12 @@ int r_bool_in_declaration(int a, int b) {
   int x = a && b;
   return x;
 }
+
+void r_goto(int x) {
+  if (x) {
+    goto end;
+  }
+  x++;
+end:
+  return;
+}
