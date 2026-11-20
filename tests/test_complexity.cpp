@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <ranges>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -1387,6 +1388,71 @@ int f(double x) { return f(- 1); }
   };
 }
 
+struct RuleCase {
+  std::string path;
+  Language lang;
+  std::map<std::string, unsigned int> functions;
+};
+
+static std::vector<RuleCase> rule_cases() {
+  const std::map<std::string, unsigned int> shared = {
+    {"r_if", 1},
+    {"r_else_if", 2},
+    {"r_else", 2},
+    {"r_nest_in_else", 4},
+    {"r_for", 3},
+    {"r_while", 1},
+    {"r_switch", 3},
+    {"r_ternary", 1},
+    {"r_ternary_nested", 3},
+    {"r_bool_seq", 2},
+    {"r_not", 1},
+    {"r_recursion", 1},
+    {"r_break_continue", 3},
+  };
+  auto with = [&](std::map<std::string, unsigned int> extra) {
+    extra.insert(shared.begin(), shared.end());
+    return extra;
+  };
+  const auto js_ts = with({
+    {"r_do_while", 1},
+    {"r_try_catch_finally", 5},
+    {"r_arrow_nesting", 2},
+    {"r_nested_function", 2},
+    {"m", 1},
+  });
+  return {
+    {.path = "tests/src/python/test_rules.py",
+     .lang = Language::Python,
+     .functions = with({
+       {"r_try_catch_finally", 5},
+       {"r_lambda_nesting", 2},
+       {"r_nested_function", 2},
+       {"r_with", 1},
+       {"r_loop_else", 2},
+       {"K::m", 1},
+     })},
+    {.path = "tests/src/javascript/test_rules.js",
+     .lang = Language::JavaScript,
+     .functions = js_ts},
+    {.path = "tests/src/typescript/test_rules.ts",
+     .lang = Language::TypeScript,
+     .functions = js_ts},
+    {.path = "tests/src/c/test_rules.c",
+     .lang = Language::C,
+     .functions = with({{"r_do_while", 1}})},
+    {.path = "tests/src/cpp/test_rules.cpp",
+     .lang = Language::Cpp,
+     .functions = with({
+       {"r_do_while", 1},
+       {"r_try_catch", 4},
+       {"r_lambda_nesting", 2},
+       {"r_range_for", 3},
+       {"K::m", 1},
+     })},
+  };
+}
+
 int main() {
   const std::vector<std::tuple<std::string, Language, unsigned int>>
     file_totals = {
@@ -1484,6 +1550,35 @@ int main() {
       std::cerr << "Mismatch for " << path << ": expected " << exp << ", got "
                 << got << "\n";
       ok = false;
+    }
+  }
+
+  for (const auto& rc : rule_cases()) {
+    std::map<std::string, unsigned int> seen;
+    for (const auto& fn : analyze_file(rc.path, rc.lang)) {
+      if (++seen[fn.name] != 1) {
+        std::cerr << "Rule case " << rc.path << ": duplicate function "
+                  << fn.name << "\n";
+        ok = false;
+        continue;
+      }
+      auto it = rc.functions.find(fn.name);
+      if (it == rc.functions.end()) {
+        std::cerr << "Rule case " << rc.path << ": unexpected function "
+                  << fn.name << "\n";
+        ok = false;
+      } else if (it->second != fn.complexity) {
+        std::cerr << "Rule case " << rc.path << ": " << fn.name << " expected "
+                  << it->second << ", got " << fn.complexity << "\n";
+        ok = false;
+      }
+    }
+    for (const auto& name : rc.functions | std::views::keys) {
+      if (!seen.contains(name)) {
+        std::cerr << "Rule case " << rc.path << ": missing function " << name
+                  << "\n";
+        ok = false;
+      }
     }
   }
 
