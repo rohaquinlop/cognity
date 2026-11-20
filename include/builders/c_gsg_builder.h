@@ -30,6 +30,9 @@ class CLikeGSGBuilder : public IBuilder {
                          const std::string& qual);
   void build_block_children(TSNode n, const std::string& src,
                             std::vector<GSGNode>& out);
+  void build_body(TSNode n, const std::string& src, std::vector<GSGNode>& out);
+  void build_statement(TSNode s, const std::string& src,
+                       std::vector<GSGNode>& out);
   void build_if(TSNode n, const std::string& src, std::vector<GSGNode>& out,
                 GSGNodeKind kind = GSGNodeKind::If);
   void build_switch(TSNode s, const std::string& src,
