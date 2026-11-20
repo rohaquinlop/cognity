@@ -1442,6 +1442,16 @@ static std::vector<RuleCase> rule_cases() {
     {"r_in_module_try", 1},
     {"RAsg::m", 1},
     {"RAsg2::p::n", 1},
+    {"r_in_module_else", 1},
+    {"r_in_module_for", 1},
+    {"r_in_module_for_in", 1},
+    {"r_in_module_while", 1},
+    {"r_in_module_do", 1},
+    {"r_in_module_case", 1},
+    {"r_in_module_catch", 1},
+    {"r_in_module_finally", 1},
+    {"r_in_module_label", 1},
+    {"r_gen", 1},
   });
   auto ts = js_ts;
   ts.insert({
@@ -1450,6 +1460,7 @@ static std::vector<RuleCase> rule_cases() {
     {"RNs::f", 1},
     {"RNs2::K::m", 1},
     {"RA::RB::g", 1},
+    {"RBlockNs::f", 1},
   });
   return {
     {.path = "tests/src/python/test_rules.py",

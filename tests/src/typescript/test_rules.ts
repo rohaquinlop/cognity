@@ -314,3 +314,95 @@ namespace RA.RB {
     }
   }
 }
+
+if (!globalThis) {
+} else {
+  function r_in_module_else(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+for (let i = 0; i < 1; i++) {
+  function r_in_module_for(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+for (const k in globalThis) {
+  function r_in_module_for_in(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+while (!globalThis) {
+  function r_in_module_while(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+do {
+  function r_in_module_do(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+} while (!globalThis);
+
+switch (globalThis) {
+  case null:
+    function r_in_module_case(a: number): unknown {
+      if (a) {
+        return 1;
+      }
+    }
+}
+
+try {
+} catch (e) {
+  function r_in_module_catch(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+try {
+} finally {
+  function r_in_module_finally(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+r_label: {
+  function r_in_module_label(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+function* r_gen(a: number) {
+  if (a) {
+    yield 1;
+  }
+}
+
+if (globalThis) {
+  namespace RBlockNs {
+    export function f(a: number): unknown {
+      if (a) {
+        return 1;
+      }
+    }
+  }
+}
