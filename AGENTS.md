@@ -44,6 +44,7 @@ file → sourcing.cpp (language by extension, .gitignore, excludes)
   - `python_gsg_builder` — Python
   - `javascript_gsg_builder` — JavaScript and TypeScript/TSX
   - `c_gsg_builder` (`CLikeGSGBuilder`) — C and C++
+- `gsg_builder_base` holds the shared builder rules, driven by a per-language spec (node types, field names, operator tokens). `ExprBuilderBase` has the expression rules (boolean sequences, parentheses); `StmtBuilderBase` adds the statement rules (if/else-if, loops, switch, try, ternary, jumps, walk by default). JS and C/C++ derive from `StmtBuilderBase`; Python uses only `ExprBuilderBase`. A builder keeps only its real special cases.
 - `compute_cognitive_complexity_gsg` holds the scoring rules (increments and nesting). It is language-independent. Algorithm changes go here first; a builder changes only when a language must emit different GSG nodes.
 - `make_builder` (in `cognitive_complexity.cpp`) maps `Language` to a builder.
 
