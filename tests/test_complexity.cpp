@@ -1457,6 +1457,7 @@ int main() {
     {"tests/src/javascript/test_bool_paren_comment.js", 1},
     {"tests/src/javascript/test_recursion.js", 8},
     {"tests/src/javascript/test_recursion_bindings.js", 11},
+    {"tests/src/javascript/test_module_bindings.js", 16},
   };
   for (const auto& [path, exp] : js_expected) {
     unsigned int got = 0;
@@ -1480,6 +1481,7 @@ int main() {
     {"tests/src/typescript/test_expr_rules.ts", 7},
     {"tests/src/typescript/test_recursion.ts", 3},
     {"tests/src/typescript/test_recursion_bindings.ts", 2},
+    {"tests/src/typescript/test_module_bindings.ts", 5},
   };
   for (const auto& [path, exp] : ts_expected) {
     unsigned int got = 0;
