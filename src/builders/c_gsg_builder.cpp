@@ -222,13 +222,14 @@ void CLikeGSGBuilder::build_switch(TSNode s, const string& src,
   for (uint32_t j = 0; j < cn; ++j) {
     TSNode cc = ts_node_named_child(body, j);
     string cty = t(cc);
-    if (cty == "case_statement" || cty == "default_statement") {
-      GSGNode cs;
-      cs.kind = GSGNodeKind::Case;
-      cs.loc = loc(cc);
+    GSGNode cs;
+    cs.kind = GSGNodeKind::Case;
+    cs.loc = loc(cc);
+    if (cty == "case_statement" || cty == "default_statement")
       build_block_children(cc, src, cs.children);
-      sw.children.emplace_back(std::move(cs));
-    }
+    else
+      build_statement(cc, src, cs.children);
+    sw.children.emplace_back(std::move(cs));
   }
   out.emplace_back(std::move(sw));
 }
