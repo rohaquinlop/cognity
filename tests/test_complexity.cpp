@@ -2,7 +2,9 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <nlohmann/json.hpp>
 #include <ranges>
+#include <set>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -1489,6 +1491,180 @@ static std::vector<RuleCase> rule_cases() {
   };
 }
 
+struct CoverageCase {
+  std::string_view lang;
+  std::vector<std::string_view> node_types;
+  std::vector<std::string_view> roots;
+  std::vector<std::string_view> mapped;
+  std::vector<std::string_view> no_score;
+};
+
+static std::vector<CoverageCase> coverage_cases() {
+  return {
+    {.lang = "python",
+     .node_types = {COGNITY_NODE_TYPES_PYTHON},
+     .roots = {"_compound_statement", "_simple_statement"},
+     .mapped = {"if_statement", "for_statement", "while_statement",
+                "match_statement", "try_statement", "with_statement",
+                "return_statement", "raise_statement", "assert_statement",
+                "delete_statement", "expression_statement",
+                "function_definition", "class_definition",
+                "decorated_definition"},
+     .no_score = {"break_statement", "continue_statement", "pass_statement",
+                  "import_statement", "import_from_statement",
+                  "future_import_statement", "global_statement",
+                  "nonlocal_statement", "exec_statement", "print_statement",
+                  "type_alias_statement"}},
+    {.lang = "javascript",
+     .node_types = {COGNITY_NODE_TYPES_JAVASCRIPT},
+     .roots = {"statement"},
+     .mapped = {"if_statement",
+                "for_statement",
+                "for_in_statement",
+                "while_statement",
+                "do_statement",
+                "switch_statement",
+                "try_statement",
+                "statement_block",
+                "expression_statement",
+                "return_statement",
+                "throw_statement",
+                "break_statement",
+                "continue_statement",
+                "labeled_statement",
+                "with_statement",
+                "function_declaration",
+                "generator_function_declaration",
+                "class_declaration",
+                "lexical_declaration",
+                "variable_declaration",
+                "export_statement"},
+     .no_score = {"debugger_statement", "empty_statement", "import_statement"}},
+    {.lang = "typescript",
+     .node_types = {COGNITY_NODE_TYPES_TYPESCRIPT, COGNITY_NODE_TYPES_TSX},
+     .roots = {"statement"},
+     .mapped = {"if_statement",
+                "for_statement",
+                "for_in_statement",
+                "while_statement",
+                "do_statement",
+                "switch_statement",
+                "try_statement",
+                "statement_block",
+                "expression_statement",
+                "return_statement",
+                "throw_statement",
+                "break_statement",
+                "continue_statement",
+                "labeled_statement",
+                "with_statement",
+                "function_declaration",
+                "generator_function_declaration",
+                "class_declaration",
+                "abstract_class_declaration",
+                "lexical_declaration",
+                "variable_declaration",
+                "export_statement",
+                "internal_module",
+                "module"},
+     .no_score = {"debugger_statement", "empty_statement", "import_statement",
+                  "import_alias", "ambient_declaration", "enum_declaration",
+                  "interface_declaration", "type_alias_declaration",
+                  "function_signature"}},
+    {.lang = "c",
+     .node_types = {COGNITY_NODE_TYPES_C},
+     .roots = {"statement"},
+     .mapped = {"if_statement", "for_statement", "while_statement",
+                "do_statement", "switch_statement", "case_statement",
+                "compound_statement", "expression_statement", "goto_statement"},
+     .no_score = {"break_statement", "continue_statement", "return_statement",
+                  "labeled_statement", "attributed_statement",
+                  "seh_try_statement", "seh_leave_statement"}},
+    {.lang = "cpp",
+     .node_types = {COGNITY_NODE_TYPES_CPP},
+     .roots = {"statement"},
+     .mapped = {"if_statement", "for_statement", "for_range_loop",
+                "while_statement", "do_statement", "switch_statement",
+                "case_statement", "try_statement", "compound_statement",
+                "expression_statement", "goto_statement"},
+     .no_score = {"break_statement", "continue_statement", "return_statement",
+                  "throw_statement", "labeled_statement",
+                  "attributed_statement", "co_return_statement",
+                  "co_yield_statement", "seh_try_statement",
+                  "seh_leave_statement"}},
+  };
+}
+
+static bool grammar_statements(std::string_view path,
+                               const std::vector<std::string_view>& roots,
+                               std::set<std::string>& out) {
+  std::ifstream ifs{std::filesystem::path(path)};
+  if (!ifs) return false;
+  std::map<std::string, std::vector<std::string>> subtypes;
+  try {
+    nlohmann::json doc = nlohmann::json::parse(ifs);
+    if (!doc.is_array()) return false;
+    for (const auto& node : doc) {
+      if (!node.contains("subtypes")) continue;
+      auto& subs = subtypes[node.value("type", "")];
+      for (const auto& sub : node["subtypes"])
+        subs.push_back(sub.value("type", ""));
+    }
+  } catch (const nlohmann::json::exception&) {
+    return false;
+  }
+  std::vector<std::string> stack(roots.begin(), roots.end());
+  while (!stack.empty()) {
+    std::string ty = std::move(stack.back());
+    stack.pop_back();
+    auto it = subtypes.find(ty);
+    if (it == subtypes.end()) {
+      out.insert(ty);
+      continue;
+    }
+    stack.insert(stack.end(), it->second.begin(), it->second.end());
+  }
+  return true;
+}
+
+static bool check_coverage(const CoverageCase& cc) {
+  bool ok = true;
+  std::set<std::string> grammar;
+  for (std::string_view path : cc.node_types) {
+    if (!grammar_statements(path, cc.roots, grammar)) {
+      std::cerr << "Coverage: " << cc.lang << " cannot read " << path << "\n";
+      return false;
+    }
+  }
+  if (grammar.empty()) {
+    std::cerr << "Coverage: " << cc.lang << " has no statement types\n";
+    return false;
+  }
+  std::map<std::string, int> listed;
+  for (std::string_view ty : cc.mapped) listed[std::string(ty)] += 1;
+  for (std::string_view ty : cc.no_score) listed[std::string(ty)] += 1;
+  for (const auto& ty : grammar) {
+    if (!listed.contains(ty)) {
+      std::cerr << "Coverage: " << cc.lang << " statement '" << ty
+                << "' is neither mapped nor no_score\n";
+      ok = false;
+    }
+  }
+  for (const auto& [ty, count] : listed) {
+    if (count > 1) {
+      std::cerr << "Coverage: " << cc.lang << " statement '" << ty
+                << "' is listed more than once\n";
+      ok = false;
+    }
+    if (!grammar.contains(ty)) {
+      std::cerr << "Coverage: " << cc.lang << " entry '" << ty
+                << "' is not a grammar statement type (stale)\n";
+      ok = false;
+    }
+  }
+  return ok;
+}
+
 int main() {
   const std::vector<std::tuple<std::string, Language, unsigned int>>
     file_totals = {
@@ -1870,6 +2046,8 @@ int main() {
       ok = false;
     }
   }
+  for (const auto& cc : coverage_cases())
+    if (!check_coverage(cc)) ok = false;
 
   if (ok) {
     std::cout << "All complexity tests passed." << std::endl;
