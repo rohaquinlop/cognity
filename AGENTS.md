@@ -49,12 +49,14 @@ file → sourcing.cpp (language by extension, .gitignore, excludes)
 
 ## Tests
 
-- `tests/test_complexity.cpp` maps each fixture to its expected **total** complexity per file, per language.
+- `tests/test_complexity.cpp` has two tables:
+  - `file_totals` (in `main()`): each fixture's expected **total** complexity, with its language.
+  - `rule_cases()`: the rule fixtures `tests/src/<lang>/test_rules.<ext>`, one function per rule, with the expected score **per function**. A function that is missing, unexpected, duplicated or wrongly scored fails the test.
 - Fixtures live in `tests/src/<lang>/`. They are analyzer inputs:
   - Never edit a fixture to make a test pass.
   - Never format them (`tests/src/.clang-format` disables formatting).
 - Python expected values come from Complexipy. When Cognity and Complexipy disagree, Cognity is wrong unless the user says otherwise.
-- To add a case: add a fixture, add its expected value to the map for its language, run `scripts/check.sh test`.
+- To add a case: add a fixture, add its row to `file_totals` (or, for a rule fixture function, to its `rule_cases()` map), run `scripts/check.sh test`.
 - Change an expected value only when the scoring rules change on purpose. Name the rule in the commit message.
 
 ## Conventions
