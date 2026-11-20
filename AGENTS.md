@@ -2,7 +2,7 @@
 
 Cognity computes cognitive complexity per function for many languages. It is a multi-language port of [Complexipy](https://github.com/rohaquinlop/complexipy) (Python only). Complexipy is the reference: for Python, Cognity must give the same numbers. Other languages apply the same rules to their constructs.
 
-C++23, CMake, tree-sitter. Grammars and the tree-sitter core are fetched from GitHub at configure time (pinned tags in `CMakeLists.txt`).
+C++23, CMake, tree-sitter. Grammars and the tree-sitter core are fetched from GitHub at configure time (pinned tags in `CMakeLists.txt`). The tests also fetch nlohmann/json (pinned version and hash).
 
 ## Prerequisites
 
@@ -50,9 +50,10 @@ file → sourcing.cpp (language by extension, .gitignore, excludes)
 
 ## Tests
 
-- `tests/test_complexity.cpp` has two tables:
+- `tests/test_complexity.cpp` has three tables:
   - `file_totals` (in `main()`): each fixture's expected **total** complexity, with its language.
   - `rule_cases()`: the rule fixtures `tests/src/<lang>/test_rules.<ext>`, one function per rule, with the expected score **per function**. A function that is missing, unexpected, duplicated or wrongly scored fails the test.
+  - `coverage_cases()`: the coverage gate. For each language it reads the statement types from the grammar's `node-types.json` (statement supertypes, expanded) and puts each one in `mapped` (the builder has a rule for it) or `no_score` (it has none). A type in neither list, in both, or not in the grammar fails the test. Only statement supertype members go in the lists. A new language adds a row.
 - Fixtures live in `tests/src/<lang>/`. They are analyzer inputs:
   - Never edit a fixture to make a test pass.
   - Never format them (`tests/src/.clang-format` disables formatting).
