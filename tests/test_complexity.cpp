@@ -1857,6 +1857,19 @@ int main() {
       ok = false;
     }
   }
+  if (language_info(Language::Unknown) != nullptr ||
+      language_info(Language::Count) != nullptr) {
+    std::cerr << "Registry: Unknown or Count has an entry\n";
+    ok = false;
+  }
+  for (Language lang : {Language::Python, Language::C, Language::Cpp,
+                        Language::JavaScript, Language::TypeScript}) {
+    const LanguageInfo* info = language_info(lang);
+    if (info == nullptr || info->id != lang) {
+      std::cerr << "Registry: language_info returns the wrong entry\n";
+      ok = false;
+    }
+  }
 
   if (ok) {
     std::cout << "All complexity tests passed." << std::endl;

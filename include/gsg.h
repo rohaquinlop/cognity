@@ -8,14 +8,15 @@
 #include <string>
 #include <vector>
 
-// Supported languages. Unknown must stay last: it is the registry size.
+// Supported languages. Add new values between Unknown and Count.
 enum class Language {
+  Unknown,
   Python,
   C,
   Cpp,
   JavaScript,
   TypeScript,
-  Unknown,
+  Count,
 };
 
 // General Syntax Graph node kinds

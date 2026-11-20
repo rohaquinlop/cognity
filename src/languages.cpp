@@ -37,7 +37,7 @@ constexpr std::array<std::string_view, 3> kTsTokens = {"ts", "typescript",
 constexpr std::array<std::string_view, 2> kTsExts = {".ts", ".tsx"};
 
 constexpr std::size_t kLanguageCount =
-  static_cast<std::size_t>(Language::Unknown);
+  static_cast<std::size_t>(Language::Count) - 1;
 
 constexpr std::array<LanguageInfo, kLanguageCount> kLanguages = {{
   {.id = Language::Python,
@@ -84,7 +84,7 @@ constexpr std::array<LanguageInfo, kLanguageCount> kLanguages = {{
 consteval bool registry_is_complete() {
   for (std::size_t i = 0; i < kLanguageCount; ++i) {
     const LanguageInfo& info = kLanguages.at(i);
-    if (info.id != static_cast<Language>(i) || info.grammar == nullptr ||
+    if (info.id != static_cast<Language>(i + 1) || info.grammar == nullptr ||
         info.make_builder == nullptr || info.tokens.empty() ||
         info.extensions.empty())
       return false;
@@ -99,7 +99,7 @@ static_assert(registry_is_complete(),
 
 const LanguageInfo* language_info(Language lang) {
   const auto i = static_cast<std::size_t>(lang);
-  return i < kLanguageCount ? &kLanguages.at(i) : nullptr;
+  return i >= 1 && i <= kLanguageCount ? &kLanguages.at(i - 1) : nullptr;
 }
 
 Language language_from_token(std::string_view tok) {
