@@ -370,9 +370,8 @@ class Resolver {
     std::ranges::stable_sort(calls_, {}, &Call::pos);
     for (const auto& c : calls_)
       for (int callee : callees(c))
-        edges[c.owner].push_back(
-          {.callee = static_cast<std::size_t>(callee),
-           .call = PythonGSGBuilder::loc_from_node(c.node)});
+        edges[c.owner].push_back({.callee = static_cast<std::size_t>(callee),
+                                  .call = PythonGSGBuilder::loc(c.node)});
     std::vector<uint32_t> starts;
     starts.reserve(defs_.size());
     for (const auto& d : defs_) starts.push_back(d.start);

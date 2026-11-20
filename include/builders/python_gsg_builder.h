@@ -1,16 +1,20 @@
 #ifndef PYTHON_GSG_BUILDER_H
 #define PYTHON_GSG_BUILDER_H
 
-#include "../../include/gsg.h"
+#include "../../include/builders/gsg_builder_base.h"
 
-class PythonGSGBuilder : public IBuilder {
+class PythonGSGBuilder : public ExprBuilderBase {
  public:
+  PythonGSGBuilder();
   std::vector<GSGNode> build_functions(TSNode root,
                                        const std::string& source) override;
 
   std::vector<RecursiveDef> recursive_defs(TSNode root,
                                            const std::string& src) override;
-  static SourceLoc loc_from_node(TSNode node);
+
+ protected:
+  bool collect_special(TSNode node, const std::string& source, GSGNode& into,
+                       bool is_root) override;
 
  private:
   void collect_functions(TSNode node, const std::string& source,
@@ -35,28 +39,18 @@ class PythonGSGBuilder : public IBuilder {
   void push_else(TSNode else_clause, const std::string& source,
                  std::vector<GSGNode>& out);
 
-  static std::string_view slice_source(const std::string& source, TSNode node);
   static std::string_view get_identifier(TSNode node,
                                          const std::string& source);
   static TSNode clause_body(TSNode clause);
   static GSGNode expr_node(GSGNodeKind kind, TSNode loc_node);
-  static void collect_assignment(TSNode node, const std::string& source,
-                                 GSGNode& into);
-  static void collect_defaults(TSNode parameters, const std::string& source,
-                               GSGNode& into);
-  static void collect_definition_header(TSNode decorated, TSNode def,
-                                        const std::string& source,
-                                        GSGNode& into);
+  void collect_assignment(TSNode node, const std::string& source,
+                          GSGNode& into);
+  void collect_defaults(TSNode parameters, const std::string& source,
+                        GSGNode& into);
+  void collect_definition_header(TSNode decorated, TSNode def,
+                                 const std::string& source, GSGNode& into);
   static bool returns_inner(TSNode ret, std::string_view inner,
                             const std::string& source);
-  static void collect_expr(TSNode node, const std::string& source,
-                           GSGNode& into);
-  static bool collect_special(TSNode node, const std::string& source,
-                              GSGNode& into);
-  static void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,
-                        const std::string& source);
-  static void push_header(GSGNode& stmt, TSNode expr,
-                          const std::string& source);
 };
 
 #endif
