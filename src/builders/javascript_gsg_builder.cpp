@@ -61,17 +61,6 @@ static bool js_is_bool(TSNode n) {
   return op == "&&" || op == "||";
 }
 
-static bool js_is_statement(const string& ty) {
-  return ty == "if_statement" || ty == "while_statement" ||
-         ty == "for_statement" || ty == "for_in_statement" ||
-         ty == "do_statement" || ty == "switch_statement" ||
-         ty == "try_statement" || ty == "statement_block" ||
-         ty == "expression_statement" || ty == "return_statement" ||
-         ty == "throw_statement" || ty == "lexical_declaration" ||
-         ty == "variable_declaration" || ty == "break_statement" ||
-         ty == "continue_statement";
-}
-
 static bool js_is_function_decl(const string& ty) {
   return ty == "function_declaration" ||
          ty == "generator_function_declaration" || ty == "method_definition";
@@ -168,10 +157,7 @@ bool JavaScriptGSGBuilder::collect_special(TSNode n, const string& src,
     into.children.emplace_back(build_function(n, src));
     return true;
   }
-  if (!is_root && js_is_statement(ty)) {
-    build_statement(n, src, into.children);
-    return true;
-  }
+  if (!is_root && build_known_statement(n, src, into.children)) return true;
   if (ty == "ternary_expression") {
     GSGNode tern;
     tern.kind = GSGNodeKind::Ternary;
@@ -325,6 +311,11 @@ void JavaScriptGSGBuilder::build_block_children(TSNode n, const string& src,
 void JavaScriptGSGBuilder::build_statement(TSNode s, const string& src,
                                            std::vector<GSGNode>& out) {
   if (ts_node_is_null(s)) return;
+  if (!build_known_statement(s, src, out)) push_expr(out, s, s, src);
+}
+
+bool JavaScriptGSGBuilder::build_known_statement(TSNode s, const string& src,
+                                                 std::vector<GSGNode>& out) {
   string ty = t(s);
   if (ty == "if_statement")
     build_if(s, src, out);
@@ -363,8 +354,9 @@ void JavaScriptGSGBuilder::build_statement(TSNode s, const string& src,
     TSNode arg = ts_node_child_by_field_name(s, "argument", 8);
     if (!ts_node_is_null(arg)) push_expr(out, s, arg, src);
   } else {
-    push_expr(out, s, s, src);
+    return false;
   }
+  return true;
 }
 
 void JavaScriptGSGBuilder::build_if(TSNode n, const string& src,

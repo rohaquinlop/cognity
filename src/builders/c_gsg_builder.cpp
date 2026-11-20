@@ -271,6 +271,11 @@ void CLikeGSGBuilder::build_block_children(TSNode n, const string& src,
 void CLikeGSGBuilder::build_statement(TSNode s, const string& src,
                                       std::vector<GSGNode>& out) {
   if (ts_node_is_null(s)) return;
+  if (!build_known_statement(s, src, out)) push_expr(out, s, s, src);
+}
+
+bool CLikeGSGBuilder::build_known_statement(TSNode s, const string& src,
+                                            std::vector<GSGNode>& out) {
   string ty = t(s);
   if (ty == "if_statement")
     build_if(s, src, out);
@@ -299,8 +304,9 @@ void CLikeGSGBuilder::build_statement(TSNode s, const string& src,
       push_expr(out, expr, expr, src);
     }
   } else {
-    push_expr(out, s, s, src);
+    return false;
   }
+  return true;
 }
 
 void CLikeGSGBuilder::build_if(TSNode n, const string& src,
@@ -401,16 +407,6 @@ static TSNode c_unwrap_parens(TSNode n) {
   return n;
 }
 
-static bool c_is_statement(const string& ty) {
-  return ty == "if_statement" || ty == "while_statement" ||
-         ty == "for_statement" || ty == "for_range_loop" ||
-         ty == "do_statement" || ty == "switch_statement" ||
-         ty == "try_statement" || ty == "compound_statement" ||
-         ty == "return_statement" || ty == "throw_statement" ||
-         ty == "declaration" || ty == "expression_statement" ||
-         ty == "goto_statement" || ty == "preproc_if" || ty == "preproc_ifdef";
-}
-
 static string_view c_bool_op(TSNode n) {
   if (ts_node_is_null(n) ||
       (t(n) != "binary_expression" && t(n) != "preproc_binary_expression"))
@@ -472,10 +468,7 @@ bool CLikeGSGBuilder::collect_special(TSNode n, const string& src,
     into.children.emplace_back(build_function(n, src));
     return true;
   }
-  if (!is_root && c_is_statement(ty)) {
-    build_statement(n, src, into.children);
-    return true;
-  }
+  if (!is_root && build_known_statement(n, src, into.children)) return true;
   if (ty == "conditional_expression") {
     GSGNode tern;
     tern.kind = GSGNodeKind::Ternary;

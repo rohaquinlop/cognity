@@ -24,6 +24,8 @@ class JavaScriptGSGBuilder : public IBuilder {
                             std::vector<GSGNode>& out);
   void build_statement(TSNode s, const std::string& src,
                        std::vector<GSGNode>& out);
+  bool build_known_statement(TSNode s, const std::string& src,
+                             std::vector<GSGNode>& out);
   void build_if(TSNode n, const std::string& src, std::vector<GSGNode>& out,
                 GSGNodeKind kind = GSGNodeKind::If);
   void build_switch(TSNode n, const std::string& src,
