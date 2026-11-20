@@ -1504,6 +1504,7 @@ int main() {
     {"tests/src/c/test_bool_ops.c", 9},
     {"tests/src/c/test_bool_paren_comment.c", 1},
     {"tests/src/c/test_recursion.c", 11},
+    {"tests/src/c/test_unbraced_bodies.c", 16},
   };
   for (const auto& [path, exp] : c_expected) {
     unsigned int got = 0;
@@ -1537,6 +1538,7 @@ int main() {
     {"tests/src/cpp/test_template_out_of_class.cpp", 3},
     {"tests/src/cpp/test_template_free.cpp", 2},
     {"tests/src/cpp/test_for_range.cpp", 14},
+    {"tests/src/cpp/test_unbraced_bodies.cpp", 7},
   };
   for (const auto& [path, exp] : cpp_expected) {
     unsigned int got = 0;
