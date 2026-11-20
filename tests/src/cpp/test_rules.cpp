@@ -136,3 +136,55 @@ struct K {
     return 0;
   }
 };
+
+int r_labeled_while(int x) {
+start:
+  while (x) {
+    x--;
+  }
+  return 0;
+}
+
+int r_bool_in_declaration(int a, int b) {
+  int x = a && b;
+  return x;
+}
+
+void r_local_struct() {
+  struct L {
+    int m(int x) {
+      if (x) {
+        return 1;
+      }
+      return 0;
+    }
+  };
+}
+
+int r_lambda_in_ternary(int a, int b) {
+  return a ? [&]() {
+    if (b) {
+      return 2;
+    }
+    return 1;
+  }() : 0;
+}
+
+void r_goto(int x) {
+  if (x) {
+    goto end;
+  }
+  x++;
+end:
+  return;
+}
+
+struct P {
+  int m(int x) {
+#ifndef NDEBUG
+    for (int i = 0; i < x; i++) {
+    }
+#endif
+    return 0;
+  }
+};

@@ -95,3 +95,82 @@ void r_break_continue(int n) {
     break;
   }
 }
+
+int r_labeled_while(int x) {
+start:
+  while (x) {
+    x--;
+  }
+  return 0;
+}
+
+int r_bool_in_declaration(int a, int b) {
+  int x = a && b;
+  return x;
+}
+
+void r_goto(int x) {
+  if (x) {
+    goto end;
+  }
+  x++;
+end:
+  return;
+}
+
+int r_ifdef(int x) {
+#ifdef DEBUG
+  if (x) {
+    return 1;
+  }
+#endif
+  return 0;
+}
+
+int r_if_else_directive(int x) {
+#if defined(A)
+  if (x) {
+    return 1;
+  }
+#else
+  while (x) {
+    x--;
+  }
+#endif
+  return 0;
+}
+
+int r_elif_bool(int x) {
+#if A && B
+  if (x) {
+    return 1;
+  }
+#elif C
+  if (x) {
+    return 2;
+  }
+#endif
+  return 0;
+}
+
+int r_if_directive_bool(int x) {
+#if (A && B) || C
+  if (x) {
+    return 1;
+  }
+#endif
+  return 0;
+}
+
+int r_elifdef(int x) {
+#ifdef A
+  if (x) {
+    return 1;
+  }
+#elifdef B
+  if (x) {
+    return 2;
+  }
+#endif
+  return 0;
+}

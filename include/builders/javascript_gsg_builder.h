@@ -22,6 +22,10 @@ class JavaScriptGSGBuilder : public IBuilder {
   GSGNode build_function_expr(TSNode n, const std::string& src);
   void build_block_children(TSNode n, const std::string& src,
                             std::vector<GSGNode>& out);
+  void build_statement(TSNode s, const std::string& src,
+                       std::vector<GSGNode>& out);
+  bool build_known_statement(TSNode s, const std::string& src,
+                             std::vector<GSGNode>& out);
   void build_if(TSNode n, const std::string& src, std::vector<GSGNode>& out,
                 GSGNodeKind kind = GSGNodeKind::If);
   void build_switch(TSNode n, const std::string& src,
@@ -32,7 +36,8 @@ class JavaScriptGSGBuilder : public IBuilder {
   GSGNode build_do_while(TSNode n, const std::string& src);
 
   void collect_expr(TSNode n, const std::string& src, GSGNode& into);
-  bool collect_special(TSNode n, const std::string& src, GSGNode& into);
+  bool collect_special(TSNode n, const std::string& src, GSGNode& into,
+                       bool is_root);
   void collect_defaults(TSNode params, const std::string& src, GSGNode& into);
   void push_expr(std::vector<GSGNode>& out, TSNode loc_node, TSNode expr,
                  const std::string& src);

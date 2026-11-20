@@ -131,3 +131,72 @@ class K {
     }
   }
 }
+
+function r_unbraced_nested_if(a, c) {
+  if (a) if (c) return 1;
+  return 0;
+}
+
+function r_unbraced_loop_body(x) {
+  while (x) if (x > 1) x--;
+}
+
+function r_local_class() {
+  class L {
+    m(x) {
+      if (x) {
+        return 1;
+      }
+    }
+  }
+  return L;
+}
+
+function r_object_method(x) {
+  const o = {
+    m() {
+      if (x) {
+        return 1;
+      }
+    },
+  };
+  return o;
+}
+
+function r_arrow_in_declaration(a) {
+  const f = () => {
+    if (a) {
+      return 1;
+    }
+  };
+  return f;
+}
+
+function r_bool_in_declaration(a, b) {
+  let x = a && b;
+  return x;
+}
+
+function r_labeled_continue(xs) {
+  outer: for (const x of xs) {
+    if (x) {
+      continue outer;
+    }
+  }
+}
+
+function r_labeled_break(xs) {
+  outer: for (const x of xs) {
+    if (x) {
+      break outer;
+    }
+  }
+}
+
+function r_labeled_block_break(a) {
+  block: {
+    if (a) {
+      break block;
+    }
+  }
+}
