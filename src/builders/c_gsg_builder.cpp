@@ -262,17 +262,9 @@ void CLikeGSGBuilder::build_block_children(TSNode n, const string& src,
     build_statement(ts_node_named_child(n, i), src, out);
 }
 
-void CLikeGSGBuilder::build_body(TSNode n, const string& src,
-                                 std::vector<GSGNode>& out) {
-  if (ts_node_is_null(n)) return;
-  if (t(n) == "compound_statement")
-    build_block_children(n, src, out);
-  else
-    build_statement(n, src, out);
-}
-
 void CLikeGSGBuilder::build_statement(TSNode s, const string& src,
                                       std::vector<GSGNode>& out) {
+  if (ts_node_is_null(s)) return;
   string ty = t(s);
   if (ty == "for_statement" || ty == "for_range_loop") {
     for (string_view f : {"initializer", "condition", "update", "right"})
@@ -314,8 +306,8 @@ void CLikeGSGBuilder::build_if(TSNode n, const string& src,
   g.kind = kind;
   g.loc = loc(n);
   push_header(g, ts_node_child_by_field_name(n, "condition", 9), src);
-  build_body(ts_node_child_by_field_name(n, "consequence", 11), src,
-             g.children);
+  build_statement(ts_node_child_by_field_name(n, "consequence", 11), src,
+                  g.children);
   out.emplace_back(std::move(g));
   TSNode alt = ts_node_child_by_field_name(n, "alternative", 11);
   if (ts_node_is_null(alt)) return;
@@ -344,7 +336,7 @@ GSGNode CLikeGSGBuilder::build_while(TSNode n, const string& src) {
   g.kind = GSGNodeKind::While;
   g.loc = loc(n);
   push_header(g, ts_node_child_by_field_name(n, "condition", 9), src);
-  build_body(ts_node_child_by_field_name(n, "body", 4), src, g.children);
+  build_statement(ts_node_child_by_field_name(n, "body", 4), src, g.children);
   return g;
 }
 
@@ -354,7 +346,7 @@ GSGNode CLikeGSGBuilder::build_for(TSNode n, const string& src) {
   g.loc = loc(n);
   for (string_view f : {"initializer", "condition", "update", "right"})
     push_header(g, ts_node_child_by_field_name(n, f.data(), f.size()), src);
-  build_body(ts_node_child_by_field_name(n, "body", 4), src, g.children);
+  build_statement(ts_node_child_by_field_name(n, "body", 4), src, g.children);
   return g;
 }
 
@@ -363,7 +355,7 @@ GSGNode CLikeGSGBuilder::build_do_while(TSNode n, const string& src) {
   g.kind = GSGNodeKind::DoWhile;
   g.loc = loc(n);
   push_header(g, ts_node_child_by_field_name(n, "condition", 9), src);
-  build_body(ts_node_child_by_field_name(n, "body", 4), src, g.children);
+  build_statement(ts_node_child_by_field_name(n, "body", 4), src, g.children);
   return g;
 }
 
