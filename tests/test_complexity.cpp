@@ -1388,166 +1388,93 @@ int f(double x) { return f(- 1); }
 }
 
 int main() {
-  // Expected totals per file (mirrors complexipy tests). Paths are relative to
-  // repository root.
-  const std::map<std::string, unsigned int> expected = {
-    {"tests/src/python/test_main.py", 0},
-    {"tests/src/python/test_for.py", 5},
-    {"tests/src/python/test_for_assign.py", 1},
-    {"tests/src/python/test_if.py", 3},
-    {"tests/src/python/test_match.py", 1},
-    {"tests/src/python/test_multiple_func.py", 0},
-    {"tests/src/python/test_nested_func.py", 2},
-    {"tests/src/python/test_recursive.py", 1},
-    {"tests/src/python/test_ternary_op.py", 1},
-    {"tests/src/python/test_try.py", 3},
-    {"tests/src/python/test_try_nested.py", 13},
-    {"tests/src/python/test_break_continue.py", 3},
-    {"tests/src/python/test_class.py", 1},
-    {"tests/src/python/test_decorator.py", 1},
-    {"tests/src/python/test_while.py", 1},
-    {"tests/src/python/test.py", 9},
-    {"tests/src/python/test_elif_else.py", 22},
-    {"tests/src/python/test_finally_with.py", 2},
-    {"tests/src/python/test_match_case.py", 7},
-    {"tests/src/python/test_loop_try_else.py", 6},
-    {"tests/src/python/test_nested_def_nesting.py", 6},
-    {"tests/src/python/test_except_match_nesting.py", 6},
-    {"tests/src/python/test_ternary_nesting.py", 3},
-    {"tests/src/python/test_ternary_branches.py", 6},
-    {"tests/src/python/test_ternary_comment.py", 2},
-    {"tests/src/python/test_return_value.py", 11},
-    {"tests/src/python/test_bool_sequences.py", 22},
-    {"tests/src/python/test_lambda_nesting.py", 8},
-    {"tests/src/python/test_expr_sites.py", 17},
-    {"tests/src/python/test_case_guard.py", 6},
-    {"tests/src/python/test_decorator_rule.py", 12},
-    {"tests/src/python/test_definition_headers.py", 3},
-    {"tests/src/python/test_function_discovery.py", 2},
-    {"tests/src/python/test_nested_definitions.py", 4},
-    {"tests/src/python/test_bool_paren_comment.py", 1},
-    {"tests/src/python/test_recursion.py", 10},
+  const std::vector<std::tuple<std::string, Language, unsigned int>>
+    file_totals = {
+      {"tests/src/python/test_main.py", Language::Python, 0},
+      {"tests/src/python/test_for.py", Language::Python, 5},
+      {"tests/src/python/test_for_assign.py", Language::Python, 1},
+      {"tests/src/python/test_if.py", Language::Python, 3},
+      {"tests/src/python/test_match.py", Language::Python, 1},
+      {"tests/src/python/test_multiple_func.py", Language::Python, 0},
+      {"tests/src/python/test_nested_func.py", Language::Python, 2},
+      {"tests/src/python/test_recursive.py", Language::Python, 1},
+      {"tests/src/python/test_ternary_op.py", Language::Python, 1},
+      {"tests/src/python/test_try.py", Language::Python, 3},
+      {"tests/src/python/test_try_nested.py", Language::Python, 13},
+      {"tests/src/python/test_break_continue.py", Language::Python, 3},
+      {"tests/src/python/test_class.py", Language::Python, 1},
+      {"tests/src/python/test_decorator.py", Language::Python, 1},
+      {"tests/src/python/test_while.py", Language::Python, 1},
+      {"tests/src/python/test.py", Language::Python, 9},
+      {"tests/src/python/test_elif_else.py", Language::Python, 22},
+      {"tests/src/python/test_finally_with.py", Language::Python, 2},
+      {"tests/src/python/test_match_case.py", Language::Python, 7},
+      {"tests/src/python/test_loop_try_else.py", Language::Python, 6},
+      {"tests/src/python/test_nested_def_nesting.py", Language::Python, 6},
+      {"tests/src/python/test_except_match_nesting.py", Language::Python, 6},
+      {"tests/src/python/test_ternary_nesting.py", Language::Python, 3},
+      {"tests/src/python/test_ternary_branches.py", Language::Python, 6},
+      {"tests/src/python/test_ternary_comment.py", Language::Python, 2},
+      {"tests/src/python/test_return_value.py", Language::Python, 11},
+      {"tests/src/python/test_bool_sequences.py", Language::Python, 22},
+      {"tests/src/python/test_lambda_nesting.py", Language::Python, 8},
+      {"tests/src/python/test_expr_sites.py", Language::Python, 17},
+      {"tests/src/python/test_case_guard.py", Language::Python, 6},
+      {"tests/src/python/test_decorator_rule.py", Language::Python, 12},
+      {"tests/src/python/test_definition_headers.py", Language::Python, 3},
+      {"tests/src/python/test_function_discovery.py", Language::Python, 2},
+      {"tests/src/python/test_nested_definitions.py", Language::Python, 4},
+      {"tests/src/python/test_bool_paren_comment.py", Language::Python, 1},
+      {"tests/src/python/test_recursion.py", Language::Python, 10},
+      {"tests/src/javascript/test_if.js", Language::JavaScript, 6},
+      {"tests/src/javascript/test_switch_ternary.js", Language::JavaScript, 3},
+      {"tests/src/javascript/test_ternary_nested.js", Language::JavaScript, 5},
+      {"tests/src/javascript/test_bool_ops.js", Language::JavaScript, 9},
+      {"tests/src/javascript/test_arrow.js", Language::JavaScript, 7},
+      {"tests/src/javascript/test_headers.js", Language::JavaScript, 8},
+      {"tests/src/javascript/test_bool_paren_comment.js", Language::JavaScript,
+       1},
+      {"tests/src/javascript/test_recursion.js", Language::JavaScript, 8},
+      {"tests/src/javascript/test_recursion_bindings.js", Language::JavaScript,
+       11},
+      {"tests/src/javascript/test_module_bindings.js", Language::JavaScript,
+       16},
+      {"tests/src/typescript/test_if.ts", Language::TypeScript, 8},
+      {"tests/src/typescript/test_expr_rules.ts", Language::TypeScript, 7},
+      {"tests/src/typescript/test_recursion.ts", Language::TypeScript, 3},
+      {"tests/src/typescript/test_recursion_bindings.ts", Language::TypeScript,
+       2},
+      {"tests/src/typescript/test_module_bindings.ts", Language::TypeScript, 5},
+      {"tests/src/c/test_if.c", Language::C, 4},
+      {"tests/src/c/test_ternary_nested.c", Language::C, 5},
+      {"tests/src/c/test_bool_ops.c", Language::C, 9},
+      {"tests/src/c/test_bool_paren_comment.c", Language::C, 1},
+      {"tests/src/c/test_recursion.c", Language::C, 11},
+      {"tests/src/c/test_unbraced_bodies.c", Language::C, 16},
+      {"tests/src/c/test_switch_prelude.c", Language::C, 10},
+      {"tests/src/cpp/test_if.cpp", Language::Cpp, 8},
+      {"tests/src/cpp/test_operator.cpp", Language::Cpp, 3},
+      {"tests/src/cpp/test_lambda.cpp", Language::Cpp, 6},
+      {"tests/src/cpp/test_lambda_sites.cpp", Language::Cpp, 6},
+      {"tests/src/cpp/test_lambda_statements.cpp", Language::Cpp, 6},
+      {"tests/src/cpp/test_bool_ops.cpp", Language::Cpp, 4},
+      {"tests/src/cpp/test_recursion.cpp", Language::Cpp, 3},
+      {"tests/src/cpp/test_switch.cpp", Language::Cpp, 6},
+      {"tests/src/cpp/test_ctor_dtor.cpp", Language::Cpp, 2},
+      {"tests/src/cpp/test_method_out_of_class.cpp", Language::Cpp, 2},
+      {"tests/src/cpp/test_template_method.cpp", Language::Cpp, 2},
+      {"tests/src/cpp/test_template_out_of_class.cpp", Language::Cpp, 3},
+      {"tests/src/cpp/test_template_free.cpp", Language::Cpp, 2},
+      {"tests/src/cpp/test_for_range.cpp", Language::Cpp, 14},
+      {"tests/src/cpp/test_unbraced_bodies.cpp", Language::Cpp, 7},
+      {"tests/src/cpp/test_switch_prelude.cpp", Language::Cpp, 7},
   };
 
   bool ok = true;
-  for (const auto& [path, exp] : expected) {
+  for (const auto& [path, lang, exp] : file_totals) {
     unsigned int got = 0;
     try {
-      got = compute_file_complexity_lang(path, Language::Python);
-    } catch (...) {
-      std::cerr << "Exception while processing: " << path << "\n";
-      ok = false;
-      continue;
-    }
-    if (got != exp) {
-      std::cerr << "Mismatch for " << path << ": expected " << exp << ", got "
-                << got << "\n";
-      ok = false;
-    }
-  }
-
-  // JavaScript (current implementation expectations)
-  const std::map<std::string, unsigned int> js_expected = {
-    {"tests/src/javascript/test_if.js", 6},
-    {"tests/src/javascript/test_switch_ternary.js", 3},
-    {"tests/src/javascript/test_ternary_nested.js", 5},
-    {"tests/src/javascript/test_bool_ops.js", 9},
-    {"tests/src/javascript/test_arrow.js", 7},
-    {"tests/src/javascript/test_headers.js", 8},
-    {"tests/src/javascript/test_bool_paren_comment.js", 1},
-    {"tests/src/javascript/test_recursion.js", 8},
-    {"tests/src/javascript/test_recursion_bindings.js", 11},
-    {"tests/src/javascript/test_module_bindings.js", 16},
-  };
-  for (const auto& [path, exp] : js_expected) {
-    unsigned int got = 0;
-    try {
-      got = compute_file_complexity_lang(path, Language::JavaScript);
-    } catch (...) {
-      std::cerr << "Exception while processing: " << path << "\n";
-      ok = false;
-      continue;
-    }
-    if (got != exp) {
-      std::cerr << "Mismatch for " << path << ": expected " << exp << ", got "
-                << got << "\n";
-      ok = false;
-    }
-  }
-
-  // TypeScript
-  const std::map<std::string, unsigned int> ts_expected = {
-    {"tests/src/typescript/test_if.ts", 8},
-    {"tests/src/typescript/test_expr_rules.ts", 7},
-    {"tests/src/typescript/test_recursion.ts", 3},
-    {"tests/src/typescript/test_recursion_bindings.ts", 2},
-    {"tests/src/typescript/test_module_bindings.ts", 5},
-  };
-  for (const auto& [path, exp] : ts_expected) {
-    unsigned int got = 0;
-    try {
-      got = compute_file_complexity_lang(path, Language::TypeScript);
-    } catch (...) {
-      std::cerr << "Exception while processing: " << path << "\n";
-      ok = false;
-      continue;
-    }
-    if (got != exp) {
-      std::cerr << "Mismatch for " << path << ": expected " << exp << ", got "
-                << got << "\n";
-      ok = false;
-    }
-  }
-
-  // C
-  const std::map<std::string, unsigned int> c_expected = {
-    {"tests/src/c/test_if.c", 4},
-    {"tests/src/c/test_ternary_nested.c", 5},
-    {"tests/src/c/test_bool_ops.c", 9},
-    {"tests/src/c/test_bool_paren_comment.c", 1},
-    {"tests/src/c/test_recursion.c", 11},
-    {"tests/src/c/test_unbraced_bodies.c", 16},
-    {"tests/src/c/test_switch_prelude.c", 10},
-  };
-  for (const auto& [path, exp] : c_expected) {
-    unsigned int got = 0;
-    try {
-      got = compute_file_complexity_lang(path, Language::C);
-    } catch (...) {
-      std::cerr << "Exception while processing: " << path << "\n";
-      ok = false;
-      continue;
-    }
-    if (got != exp) {
-      std::cerr << "Mismatch for " << path << ": expected " << exp << ", got "
-                << got << "\n";
-      ok = false;
-    }
-  }
-
-  // C++
-  const std::map<std::string, unsigned int> cpp_expected = {
-    {"tests/src/cpp/test_if.cpp", 8},
-    {"tests/src/cpp/test_operator.cpp", 3},
-    {"tests/src/cpp/test_lambda.cpp", 6},
-    {"tests/src/cpp/test_lambda_sites.cpp", 6},
-    {"tests/src/cpp/test_lambda_statements.cpp", 6},
-    {"tests/src/cpp/test_bool_ops.cpp", 4},
-    {"tests/src/cpp/test_recursion.cpp", 3},
-    {"tests/src/cpp/test_switch.cpp", 6},
-    {"tests/src/cpp/test_ctor_dtor.cpp", 2},
-    {"tests/src/cpp/test_method_out_of_class.cpp", 2},
-    {"tests/src/cpp/test_template_method.cpp", 2},
-    {"tests/src/cpp/test_template_out_of_class.cpp", 3},
-    {"tests/src/cpp/test_template_free.cpp", 2},
-    {"tests/src/cpp/test_for_range.cpp", 14},
-    {"tests/src/cpp/test_unbraced_bodies.cpp", 7},
-    {"tests/src/cpp/test_switch_prelude.cpp", 7},
-  };
-  for (const auto& [path, exp] : cpp_expected) {
-    unsigned int got = 0;
-    try {
-      got = compute_file_complexity_lang(path, Language::Cpp);
+      got = compute_file_complexity_lang(path, lang);
     } catch (...) {
       std::cerr << "Exception while processing: " << path << "\n";
       ok = false;
