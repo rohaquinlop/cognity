@@ -183,9 +183,10 @@ class Resolver {
       walk_function(n, scope, owner, cls);
       return true;
     }
-    if (t == "class_declaration" || t == "class") {
+    if (t == "class_declaration" || t == "abstract_class_declaration" ||
+        t == "class") {
       TSNode name = field(n, "name");
-      if (t == "class_declaration" && !ts_node_is_null(name))
+      if (t != "class" && !ts_node_is_null(name))
         scopes_[scope].names[text(name)].other = true;
       const int id = static_cast<int>(classes_.size());
       classes_.emplace_back();

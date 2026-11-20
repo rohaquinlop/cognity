@@ -153,6 +153,7 @@ target_link_libraries(cognity_tests PRIVATE
   ts_python
   ts_javascript
   ts_typescript
+  ts_tsx
   ts_c
   ts_cpp
   tree_sitter

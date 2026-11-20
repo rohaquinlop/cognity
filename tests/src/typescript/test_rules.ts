@@ -200,3 +200,209 @@ function r_labeled_block_break(a: number): unknown {
     }
   }
 }
+
+const r_obj = {
+  m(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  },
+  a: (b: number): unknown => {
+    if (b) {
+      return 1;
+    }
+  },
+};
+
+class RField {
+  h = (a: number): unknown => {
+    if (a) {
+      return 1;
+    }
+  };
+}
+
+const RExpr = class RInner {
+  m(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+};
+
+class ROuter {
+  static Inner = class {
+    n(a: number): unknown {
+      if (a) {
+        return 1;
+      }
+    }
+  };
+}
+
+if (globalThis) {
+  function r_in_module_if(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+try {
+  function r_in_module_try(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+} catch (e) {}
+
+const RAsg: any = {};
+RAsg.m = (a: number): unknown => {
+  if (a) {
+    return 1;
+  }
+};
+
+const RAsg2: any = {};
+RAsg2.p = {
+  n(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  },
+};
+
+abstract class RAbs {
+  abstract k(): void;
+  m(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+abstract class RAbsRec {
+  m(n: number): unknown {
+    if (n) {
+      return this.m(n - 1);
+    }
+  }
+}
+
+namespace RNs {
+  export function f(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+namespace RNs2 {
+  class K {
+    m(a: number): unknown {
+      if (a) {
+        return 1;
+      }
+    }
+  }
+}
+
+namespace RA.RB {
+  export function g(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+if (!globalThis) {
+} else {
+  function r_in_module_else(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+for (let i = 0; i < 1; i++) {
+  function r_in_module_for(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+for (const k in globalThis) {
+  function r_in_module_for_in(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+while (!globalThis) {
+  function r_in_module_while(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+do {
+  function r_in_module_do(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+} while (!globalThis);
+
+switch (globalThis) {
+  case null:
+    function r_in_module_case(a: number): unknown {
+      if (a) {
+        return 1;
+      }
+    }
+}
+
+try {
+} catch (e) {
+  function r_in_module_catch(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+try {
+} finally {
+  function r_in_module_finally(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+r_label: {
+  function r_in_module_label(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+function* r_gen(a: number) {
+  if (a) {
+    yield 1;
+  }
+}
+
+if (globalThis) {
+  namespace RBlockNs {
+    export function f(a: number): unknown {
+      if (a) {
+        return 1;
+      }
+    }
+  }
+}

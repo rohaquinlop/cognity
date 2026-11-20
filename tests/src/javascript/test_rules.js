@@ -200,3 +200,156 @@ function r_labeled_block_break(a) {
     }
   }
 }
+
+const r_obj = {
+  m(a) {
+    if (a) {
+      return 1;
+    }
+  },
+  a: (b) => {
+    if (b) {
+      return 1;
+    }
+  },
+};
+
+class RField {
+  h = (a) => {
+    if (a) {
+      return 1;
+    }
+  };
+}
+
+const RExpr = class RInner {
+  m(a) {
+    if (a) {
+      return 1;
+    }
+  }
+};
+
+class ROuter {
+  static Inner = class {
+    n(a) {
+      if (a) {
+        return 1;
+      }
+    }
+  };
+}
+
+if (globalThis) {
+  function r_in_module_if(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+try {
+  function r_in_module_try(a) {
+    if (a) {
+      return 1;
+    }
+  }
+} catch (e) {}
+
+const RAsg = {};
+RAsg.m = (a) => {
+  if (a) {
+    return 1;
+  }
+};
+
+const RAsg2 = {};
+RAsg2.p = {
+  n(a) {
+    if (a) {
+      return 1;
+    }
+  },
+};
+
+if (!globalThis) {
+} else {
+  function r_in_module_else(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+for (let i = 0; i < 1; i++) {
+  function r_in_module_for(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+for (const k in globalThis) {
+  function r_in_module_for_in(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+while (!globalThis) {
+  function r_in_module_while(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+do {
+  function r_in_module_do(a) {
+    if (a) {
+      return 1;
+    }
+  }
+} while (!globalThis);
+
+switch (globalThis) {
+  case null:
+    function r_in_module_case(a) {
+      if (a) {
+        return 1;
+      }
+    }
+}
+
+try {
+} catch (e) {
+  function r_in_module_catch(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+try {
+} finally {
+  function r_in_module_finally(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+r_label: {
+  function r_in_module_label(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+function* r_gen(a) {
+  if (a) {
+    yield 1;
+  }
+}
