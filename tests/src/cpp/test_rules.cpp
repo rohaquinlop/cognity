@@ -178,3 +178,13 @@ void r_goto(int x) {
 end:
   return;
 }
+
+struct P {
+  int m(int x) {
+#ifndef NDEBUG
+    for (int i = 0; i < x; i++) {
+    }
+#endif
+    return 0;
+  }
+};

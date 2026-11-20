@@ -117,3 +117,47 @@ void r_goto(int x) {
 end:
   return;
 }
+
+int r_ifdef(int x) {
+#ifdef DEBUG
+  if (x) {
+    return 1;
+  }
+#endif
+  return 0;
+}
+
+int r_if_else_directive(int x) {
+#if defined(A)
+  if (x) {
+    return 1;
+  }
+#else
+  while (x) {
+    x--;
+  }
+#endif
+  return 0;
+}
+
+int r_elif_bool(int x) {
+#if A && B
+  if (x) {
+    return 1;
+  }
+#elif C
+  if (x) {
+    return 2;
+  }
+#endif
+  return 0;
+}
+
+int r_if_directive_bool(int x) {
+#if (A && B) || C
+  if (x) {
+    return 1;
+  }
+#endif
+  return 0;
+}

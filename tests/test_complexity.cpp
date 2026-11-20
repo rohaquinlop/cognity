@@ -1454,6 +1454,10 @@ static std::vector<RuleCase> rule_cases() {
        {"r_labeled_while", 1},
        {"r_bool_in_declaration", 1},
        {"r_goto", 2},
+       {"r_ifdef", 3},
+       {"r_if_else_directive", 6},
+       {"r_elif_bool", 7},
+       {"r_if_directive_bool", 5},
      })},
     {.path = "tests/src/cpp/test_rules.cpp",
      .lang = Language::Cpp,
@@ -1468,6 +1472,7 @@ static std::vector<RuleCase> rule_cases() {
        {"r_local_struct", 2},
        {"r_lambda_in_ternary", 4},
        {"r_goto", 2},
+       {"P::m", 3},
      })},
   };
 }

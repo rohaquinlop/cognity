@@ -286,6 +286,8 @@ void CLikeGSGBuilder::build_statement(TSNode s, const string& src,
     build_try(s, src, out);
   else if (ty == "compound_statement")
     build_block_children(s, src, out);
+  else if (ty == "preproc_if" || ty == "preproc_ifdef")
+    build_preproc(s, src, out);
   else if (ty == "goto_statement") {
     GSGNode j;
     j.kind = GSGNodeKind::Jump;
@@ -330,6 +332,29 @@ void CLikeGSGBuilder::build_if(TSNode n, const string& src,
   out.emplace_back(std::move(el));
 }
 
+void CLikeGSGBuilder::build_preproc(TSNode n, const string& src,
+                                    std::vector<GSGNode>& out,
+                                    GSGNodeKind kind) {
+  GSGNode g;
+  g.kind = kind;
+  g.loc = loc(n);
+  TSNode cond = ts_node_child_by_field_name(n, "condition", 9);
+  TSNode name = ts_node_child_by_field_name(n, "name", 4);
+  TSNode alt = ts_node_child_by_field_name(n, "alternative", 11);
+  push_header(g, cond, src);
+  uint32_t m = ts_node_named_child_count(n);
+  for (uint32_t i = 0; i < m; ++i) {
+    TSNode ch = ts_node_named_child(n, i);
+    if (!ts_node_eq(ch, cond) && !ts_node_eq(ch, name) && !ts_node_eq(ch, alt))
+      build_statement(ch, src, g.children);
+  }
+  out.emplace_back(std::move(g));
+  if (ts_node_is_null(alt)) return;
+  build_preproc(
+    alt, src, out,
+    t(alt) == "preproc_else" ? GSGNodeKind::Else : GSGNodeKind::ElseIf);
+}
+
 GSGNode CLikeGSGBuilder::build_while(TSNode n, const string& src) {
   GSGNode g;
   g.kind = GSGNodeKind::While;
@@ -359,7 +384,8 @@ GSGNode CLikeGSGBuilder::build_do_while(TSNode n, const string& src) {
 }
 
 static TSNode c_unwrap_parens(TSNode n) {
-  while (!ts_node_is_null(n) && t(n) == "parenthesized_expression") {
+  while (!ts_node_is_null(n) && (t(n) == "parenthesized_expression" ||
+                                 t(n) == "preproc_parenthesized_expression")) {
     TSNode only{};
     uint32_t count = 0;
     uint32_t m = ts_node_named_child_count(n);
@@ -382,11 +408,13 @@ static bool c_is_statement(const string& ty) {
          ty == "try_statement" || ty == "compound_statement" ||
          ty == "return_statement" || ty == "throw_statement" ||
          ty == "declaration" || ty == "expression_statement" ||
-         ty == "goto_statement";
+         ty == "goto_statement" || ty == "preproc_if" || ty == "preproc_ifdef";
 }
 
 static string_view c_bool_op(TSNode n) {
-  if (ts_node_is_null(n) || t(n) != "binary_expression") return {};
+  if (ts_node_is_null(n) ||
+      (t(n) != "binary_expression" && t(n) != "preproc_binary_expression"))
+    return {};
   string_view op{ts_node_type(ts_node_child_by_field_name(n, "operator", 8))};
   if (op == "&&" || op == "and") return "&&";
   if (op == "||" || op == "or") return "||";
