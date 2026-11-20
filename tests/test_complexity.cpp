@@ -16,6 +16,7 @@ extern "C" {
 const TSLanguage* tree_sitter_python();
 const TSLanguage* tree_sitter_javascript();
 const TSLanguage* tree_sitter_typescript();
+const TSLanguage* tree_sitter_tsx();
 const TSLanguage* tree_sitter_c();
 const TSLanguage* tree_sitter_cpp();
 }
@@ -29,7 +30,8 @@ static std::string read_file(const std::filesystem::path& p) {
 }
 
 static std::vector<FunctionComplexity> analyze_source(const std::string& src,
-                                                      Language lang) {
+                                                      Language lang,
+                                                      bool tsx = false) {
   TSParser* parser = ts_parser_new();
   switch (lang) {
     case Language::Python:
@@ -41,7 +43,8 @@ static std::vector<FunctionComplexity> analyze_source(const std::string& src,
       if (lang == Language::JavaScript)
         ts_parser_set_language(parser, tree_sitter_javascript());
       else
-        ts_parser_set_language(parser, tree_sitter_typescript());
+        ts_parser_set_language(
+          parser, tsx ? tree_sitter_tsx() : tree_sitter_typescript());
       break;
     case Language::C:
       ts_parser_set_language(parser, tree_sitter_c());
@@ -64,7 +67,8 @@ static std::vector<FunctionComplexity> analyze_file(
   // location to find the repository root regardless of current working dir.
   static const std::filesystem::path project_root =
     std::filesystem::path(__FILE__).parent_path().parent_path();
-  return analyze_source(read_file(project_root / rel), lang);
+  return analyze_source(read_file(project_root / rel), lang,
+                        rel.extension() == ".tsx");
 }
 
 static unsigned int total(const std::vector<FunctionComplexity>& fns) {
@@ -1419,7 +1423,7 @@ static std::vector<RuleCase> rule_cases() {
     {"r_try_catch_finally", 5},
     {"r_arrow_nesting", 2},
     {"r_nested_function", 2},
-    {"m", 1},
+    {"K::m", 1},
     {"r_unbraced_nested_if", 3},
     {"r_unbraced_loop_body", 3},
     {"r_local_class", 2},
@@ -1429,6 +1433,23 @@ static std::vector<RuleCase> rule_cases() {
     {"r_labeled_continue", 4},
     {"r_labeled_break", 4},
     {"r_labeled_block_break", 2},
+    {"r_obj::m", 1},
+    {"r_obj::a", 1},
+    {"RField::h", 1},
+    {"RExpr::m", 1},
+    {"ROuter::Inner::n", 1},
+    {"r_in_module_if", 1},
+    {"r_in_module_try", 1},
+    {"RAsg::m", 1},
+    {"RAsg2::p::n", 1},
+  });
+  auto ts = js_ts;
+  ts.insert({
+    {"RAbs::m", 1},
+    {"RAbsRec::m", 2},
+    {"RNs::f", 1},
+    {"RNs2::K::m", 1},
+    {"RA::RB::g", 1},
   });
   return {
     {.path = "tests/src/python/test_rules.py",
@@ -1444,9 +1465,18 @@ static std::vector<RuleCase> rule_cases() {
     {.path = "tests/src/javascript/test_rules.js",
      .lang = Language::JavaScript,
      .functions = js_ts},
+    {.path = "tests/src/javascript/test_rules_default.js",
+     .lang = Language::JavaScript,
+     .functions = {{"default", 1}}},
+    {.path = "tests/src/javascript/test_rules_cjs.js",
+     .lang = Language::JavaScript,
+     .functions = {{"module::exports::m", 1}, {"exports::f", 1}}},
     {.path = "tests/src/typescript/test_rules.ts",
      .lang = Language::TypeScript,
-     .functions = js_ts},
+     .functions = ts},
+    {.path = "tests/src/typescript/test_rules_units.tsx",
+     .lang = Language::TypeScript,
+     .functions = {{"r_tsx_obj::m", 1}, {"RTsxField::h", 1}}},
     {.path = "tests/src/c/test_rules.c",
      .lang = Language::C,
      .functions = with({

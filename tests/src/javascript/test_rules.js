@@ -200,3 +200,74 @@ function r_labeled_block_break(a) {
     }
   }
 }
+
+const r_obj = {
+  m(a) {
+    if (a) {
+      return 1;
+    }
+  },
+  a: (b) => {
+    if (b) {
+      return 1;
+    }
+  },
+};
+
+class RField {
+  h = (a) => {
+    if (a) {
+      return 1;
+    }
+  };
+}
+
+const RExpr = class RInner {
+  m(a) {
+    if (a) {
+      return 1;
+    }
+  }
+};
+
+class ROuter {
+  static Inner = class {
+    n(a) {
+      if (a) {
+        return 1;
+      }
+    }
+  };
+}
+
+if (globalThis) {
+  function r_in_module_if(a) {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+try {
+  function r_in_module_try(a) {
+    if (a) {
+      return 1;
+    }
+  }
+} catch (e) {}
+
+const RAsg = {};
+RAsg.m = (a) => {
+  if (a) {
+    return 1;
+  }
+};
+
+const RAsg2 = {};
+RAsg2.p = {
+  n(a) {
+    if (a) {
+      return 1;
+    }
+  },
+};

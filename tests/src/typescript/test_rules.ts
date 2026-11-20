@@ -200,3 +200,117 @@ function r_labeled_block_break(a: number): unknown {
     }
   }
 }
+
+const r_obj = {
+  m(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  },
+  a: (b: number): unknown => {
+    if (b) {
+      return 1;
+    }
+  },
+};
+
+class RField {
+  h = (a: number): unknown => {
+    if (a) {
+      return 1;
+    }
+  };
+}
+
+const RExpr = class RInner {
+  m(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+};
+
+class ROuter {
+  static Inner = class {
+    n(a: number): unknown {
+      if (a) {
+        return 1;
+      }
+    }
+  };
+}
+
+if (globalThis) {
+  function r_in_module_if(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+try {
+  function r_in_module_try(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+} catch (e) {}
+
+const RAsg: any = {};
+RAsg.m = (a: number): unknown => {
+  if (a) {
+    return 1;
+  }
+};
+
+const RAsg2: any = {};
+RAsg2.p = {
+  n(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  },
+};
+
+abstract class RAbs {
+  abstract k(): void;
+  m(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+abstract class RAbsRec {
+  m(n: number): unknown {
+    if (n) {
+      return this.m(n - 1);
+    }
+  }
+}
+
+namespace RNs {
+  export function f(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
+
+namespace RNs2 {
+  class K {
+    m(a: number): unknown {
+      if (a) {
+        return 1;
+      }
+    }
+  }
+}
+
+namespace RA.RB {
+  export function g(a: number): unknown {
+    if (a) {
+      return 1;
+    }
+  }
+}
