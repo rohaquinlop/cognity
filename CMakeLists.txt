@@ -100,6 +100,30 @@ ts_fetch_grammar_subdir(TSX https://github.com/tree-sitter/tree-sitter-typescrip
 ts_fetch_grammar(C https://github.com/tree-sitter/tree-sitter-c ${TS_C_TAG})
 ts_fetch_grammar(CPP https://github.com/tree-sitter/tree-sitter-cpp ${TS_CPP_TAG})
 
+# Grammar node-types.json files, read by the test coverage gate
+set(COGNITY_NODE_TYPES_DEFS)
+foreach(PAIR python:src javascript:src typescript:typescript/src tsx:tsx/src c:src cpp:src)
+  string(REPLACE ":" ";" PAIR "${PAIR}")
+  list(GET PAIR 0 NT_LANG)
+  list(GET PAIR 1 NT_SUBDIR)
+  FetchContent_GetProperties(ts_${NT_LANG}_repo SOURCE_DIR NT_DIR)
+  file(TO_CMAKE_PATH "${NT_DIR}/${NT_SUBDIR}/node-types.json" NT_PATH)
+  string(TOUPPER "${NT_LANG}" NT_UPPER)
+  list(APPEND COGNITY_NODE_TYPES_DEFS "COGNITY_NODE_TYPES_${NT_UPPER}=\"${NT_PATH}\"")
+endforeach()
+
+# JSON reader for the test coverage gate (test target only)
+set(NLOHMANN_JSON_VERSION "v3.12.0")
+if(POLICY CMP0135)
+  cmake_policy(SET CMP0135 NEW)
+endif()
+FetchContent_Declare(
+  nlohmann_json
+  URL      https://github.com/nlohmann/json/releases/download/${NLOHMANN_JSON_VERSION}/json.tar.xz
+  URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 
 # Executable
 set(SOURCES
@@ -161,7 +185,9 @@ target_link_libraries(cognity_tests PRIVATE
   ts_c
   ts_cpp
   tree_sitter
+  nlohmann_json::nlohmann_json
 )
+target_compile_definitions(cognity_tests PRIVATE ${COGNITY_NODE_TYPES_DEFS})
 
 enable_testing()
 add_test(NAME cognity_complexity_tests COMMAND cognity_tests)
